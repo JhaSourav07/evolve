@@ -22,7 +22,7 @@ Evolve is organized as a pnpm workspace with focused package boundaries:
 - [`packages/core`](./packages/core): Pure domain models, system interfaces, typed event bus, and core utilities.
 - `packages/db`: SQLite persistence, migrations, and repositories (Milestone 2).
 - `packages/agent`: Ollama provider, tool execution engine, cognitive loop, and reflection memory (Milestones 3–6).
-- `packages/cli`: Interactive terminal UI and command palette (Milestone 7).
+- [`apps/cli`](./apps/cli): Command-line interface and terminal entrypoint.
 
 ---
 
@@ -34,19 +34,25 @@ Evolve is organized as a pnpm workspace with focused package boundaries:
 - pnpm `>= 10.0.0`
 - Git
 
-### Installation & Build
+### Workspace Commands
 
 ```bash
-# Install dependencies
+# Install dependencies across all workspace packages
 pnpm install
 
 # Typecheck all packages
 pnpm run typecheck
 
-# Run test suite
+# Lint with ESLint
+pnpm run lint
+
+# Check formatting with Prettier
+pnpm run format:check
+
+# Run test suite with Vitest
 pnpm run test
 
-# Build all packages
+# Build all packages via TypeScript project references
 pnpm run build
 ```
 

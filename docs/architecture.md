@@ -62,12 +62,12 @@ graph TD
 
 ## 3. Package Responsibilities
 
-| Package | Responsibility | Dependencies |
-| :--- | :--- | :--- |
-| `@evolve/core` | Pure domain types, events, error definitions, and result monads. | Zero runtime dependencies |
-| `@evolve/db` | Database connection, schema migrations, query layer, and repository implementations. | `@evolve/core`, `better-sqlite3` or `kysely` |
-| `@evolve/agent` | ReAct cognitive loop, Ollama API client, tool definitions, execution sandbox, and reflexion logic. | `@evolve/core`, `@evolve/db` |
-| `@evolve/cli` | Command-line parser, terminal UI, real-time event streaming, and approval prompts. | `@evolve/core`, `@evolve/agent` |
+| Package         | Location         | Responsibility                                                                                     | Dependencies                                 |
+| :-------------- | :--------------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| `@evolve/core`  | `packages/core`  | Pure domain types, events, error definitions, and result monads.                                   | Zero runtime dependencies                    |
+| `@evolve/db`    | `packages/db`    | Database connection, schema migrations, query layer, and repository implementations.               | `@evolve/core`, `better-sqlite3` or `kysely` |
+| `@evolve/agent` | `packages/agent` | ReAct cognitive loop, Ollama API client, tool definitions, execution sandbox, and reflexion logic. | `@evolve/core`, `@evolve/db`                 |
+| `@evolve/cli`   | `apps/cli`       | Command-line parser, terminal UI, real-time event streaming, and approval prompts.                 | `@evolve/core`, `@evolve/agent`              |
 
 ---
 

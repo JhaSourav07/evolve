@@ -5,6 +5,7 @@
 Evolve uses **SQLite** for local persistence.
 
 ### Why SQLite?
+
 - **Zero Server Setup**: Single file database embedded in the application process.
 - **ACID Compliant**: Complete transaction guarantees and crash safety.
 - **WAL Mode (Write-Ahead Logging)**: High-concurrency reads alongside concurrent writes without locking reader transactions.
@@ -82,4 +83,5 @@ erDiagram
 ---
 
 ## 3. Migration Strategy
+
 All database migrations are version-controlled SQL files running sequentially with automated rollback capability.

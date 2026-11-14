@@ -1,0 +1,24 @@
+{
+  "name": "@evolve/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Evolve AI coding agent",
+  "type": "module",
+  "bin": {
+    "evolve": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@evolve/core": "workspace:*"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cli"
+  ],
+  "author": "Sourav Jha",
+  "license": "MIT"
+}
