@@ -1,0 +1,26 @@
+{
+  "name": "@evolve/core",
+  "version": "0.1.0",
+  "description": "Core types, interfaces, and utilities for Evolve",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "core"
+  ],
+  "author": "Sourav Jha",
+  "license": "MIT"
+}
