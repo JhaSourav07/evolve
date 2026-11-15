@@ -153,5 +153,5 @@ describe('Live Local Ollama Integration', () => {
 
     expect(response.message.content).toBeDefined();
     expect(response.message.content.length).toBeGreaterThan(0);
-  }, 30_000); // 30s timeout for live LLM execution
+  }, 60_000); // 60s timeout for live LLM execution including cold model load
 });

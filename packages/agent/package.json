@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@evolve/core": "workspace:*",
-    "@evolve/db": "workspace:*"
+    "@evolve/db": "workspace:*",
+    "zod": "^4.6.7"
   },
   "keywords": [
     "ai",

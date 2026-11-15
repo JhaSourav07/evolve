@@ -43,4 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added native Ollama and fallback JSON tool-call parsing with arguments normalization.
   - Implemented `MockModelProvider` for offline, deterministic unit testing.
   - Added comprehensive test suites with mocked network responses and live local Ollama verification (49 total workspace tests passing).
-- Updated architecture documentation with the complete prompt lifecycle trace.
+- Implemented `@evolve/agent` runtime and execution loop:
+  - Implemented `AgentRuntime` managing the iterative think-act-observe agent loop, tool execution, step limits, cancellation, and event emission.
+  - Implemented `ConversationManager` maintaining structured chronological message history (`system`, `user`, `assistant`, `tool`).
+  - Implemented `ContextManager` handling token estimation, system prompt construction, and context pruning while preserving tool-call pairs.
+  - Implemented `ToolRegistry` and basic filesystem tools (`readFileTool`, `writeFileTool`) with workspace boundary enforcement.
+  - Added resilient error recovery for unknown tools, invalid parameters, and unhandled tool execution exceptions.
+  - Implemented `createMinimalOllamaAgent` demonstrating end-to-end integration with local Ollama instances.
+  - Added integration test suite verifying multi-step tasks, iteration limits, AbortSignal cancellation, error recovery, and SQLite event persistence (58 total workspace tests passing).
+- Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.

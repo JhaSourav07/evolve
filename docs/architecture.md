@@ -100,3 +100,61 @@ sequenceDiagram
 3. **Act**: Execute the requested tool inside an audited, safe execution boundary.
 4. **Observe**: Read the tool output (stdout, stderr, exit code, file contents).
 5. **Reflect**: If the action fails (test failure, syntax error, missing dependency), evaluate the cause, create an episodic reflection, and adjust the next planning step.
+
+---
+
+## 6. Agent Runtime Architecture (`AgentRuntime`)
+
+The agent runtime in `@evolve/agent` manages the autonomous execution loop independently of specific CLI interfaces or model providers:
+
+```mermaid
+flowchart TD
+    Start(["session_started"]) --> UserPrompt["Emit user_prompt & Record in Conversation"]
+    UserPrompt --> LoopCheck{"step < maxSteps AND !signal.aborted?"}
+
+    LoopCheck -- "No (Limit or Abort)" --> FinishFailure["Emit session_completed (success: false)"]
+    FinishFailure --> ReturnFailure(["Return Failure Result"])
+
+    LoopCheck -- "Yes" --> AssembleContext["ContextManager: Build Context Messages & Prune if Needed"]
+    AssembleContext --> FormatTools["ToolRegistry: Format Model Tool Definitions"]
+    FormatTools --> ModelCall["ModelProvider.generate(messages, options)"]
+
+    ModelCall --> EmitAssistant["Emit assistant_response & Record in Conversation"]
+    EmitAssistant --> HasTools{"Model requested tool calls?"}
+
+    HasTools -- "No (Task Complete)" --> FinishSuccess["Emit session_completed (success: true)"]
+    FinishSuccess --> ReturnSuccess(["Return Success Result"])
+
+    HasTools -- "Yes" --> ExecTools["Iterate Tool Calls"]
+    ExecTools --> EmitToolCall["Emit tool_call"]
+    EmitToolCall --> ToolLookup{"Tool Registered & Args Valid?"}
+
+    ToolLookup -- "Valid" --> RunTool["tool.execute(params, context)"]
+    ToolLookup -- "Invalid / Missing" --> ToolErr["Format Safe Error Output"]
+    RunTool --> EmitResult["Emit tool_result & Record in Conversation"]
+    ToolErr --> EmitResult
+
+    EmitResult --> LoopCheck
+```
+
+### 6.1 Key Components
+
+1. **`AgentRuntime`**:
+   - The central orchestrator that drives iterations from start to conclusion.
+   - Manages cancellation via standard `AbortSignal`.
+   - Protects against runaway execution loops via configurable `maxSteps` (default: 20).
+   - Encapsulates error recovery: crashes in tools or invalid tool parameters are converted into informative tool responses rather than crashing the runtime.
+   - Emits strongly-typed, schema-validated lifecycle events at every step (`session_started`, `user_prompt`, `assistant_response`, `tool_call`, `tool_result`, `session_completed`).
+
+2. **`ConversationManager`**:
+   - Maintains the canonical sequence of messages: system messages, user queries, assistant replies, and tool results.
+   - Preserves message order and provides serializable state snapshots (`toJSON` / `fromJSON`).
+
+3. **`ContextManager`**:
+   - Computes fast token estimates (~4 characters/token rule of thumb).
+   - Assembles system instructions including workspace constraints, environment data, and operational guidelines.
+   - Enforces token budgets (`maxContextTokens`): prunes middle conversation history while strictly preserving the system prompt, the initial user goal, and atomic tool-call/tool-result pairings.
+
+4. **`ToolRegistry`**:
+   - Central catalog for registering executable `AgentTool` implementations.
+   - Automatically converts Zod parameter schemas into JSON Schema specifications consumed by LLMs.
