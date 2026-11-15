@@ -343,7 +343,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               'Evolve CLI Commands:',
               '  /chat            - Return to active chat view',
               '  /model [name/#]  - Select or switch active Ollama model',
-              '  /thinking        - Toggle thinking process display (Shortcut: Ctrl+O)',
+              '  /details         - Toggle thinking & tool output details (Shortcut: Ctrl+O)',
               '  /status          - Show system and project status dashboard',
               '  /history         - View previous sessions',
               '  /memory          - View project conventions and stored experiences',
@@ -361,6 +361,8 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       case '/thinking':
       case '/think':
+      case '/details':
+      case '/output':
         setIsThinkingExpanded((prev) => {
           const next = !prev;
           setMessages((m) => [
@@ -368,7 +370,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             {
               id: `sys_${Date.now()}`,
               role: 'system',
-              content: `Thinking process view is now ${next ? 'EXPANDED' : 'COLLAPSED'}. (Shortcut: Ctrl+O)`,
+              content: `Detailed output view (thinking & tool outputs) is now ${next ? 'EXPANDED' : 'COLLAPSED'}. (Shortcut: Ctrl+O)`,
               timestamp: Date.now(),
             },
           ]);

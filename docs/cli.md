@@ -67,7 +67,7 @@ Within the chat input box, type slash commands for quick navigation:
 - `/integrations`: Check consent governance and connected adapters.
 - `/models`: Discover available local Ollama models.
 - `/model [name/#]`: Switch or select the active Ollama model.
-- `/thinking`: Toggle collapsible model thinking/reasoning process (Shortcut: `Ctrl + O`).
+- `/details` (or `/thinking`): Toggle collapsible model thinking and multi-line tool outputs (Shortcut: `Ctrl + O`).
 - `/feedback`: Rate the last agent interaction (+1 / 0 / -1).
 - `/clear`: Clear the on-screen message list.
 - `/new`: Start a fresh agent session.
@@ -104,18 +104,18 @@ Press **Ctrl + C** at any point while Evolve is thinking or executing tools. The
 
 ## 4. Keyboard Shortcuts Reference
 
-| Shortcut                     | Action                                                        |
-| ---------------------------- | ------------------------------------------------------------- |
-| `Enter`                      | Submit prompt to agent                                        |
-| `\` at end of line + `Enter` | Insert newline for multiline input                            |
-| `Up Arrow`                   | Navigate backwards through command history                    |
-| `Down Arrow`                 | Navigate forwards through command history                     |
-| `Ctrl + O`                   | Toggle collapsible thinking / reasoning process (expand/hide) |
-| `Ctrl + C` (while running)   | Cancel ongoing agent task                                     |
-| `Ctrl + C` (while idle)      | Exit Evolve CLI                                               |
-| `Y` / `N` / `C`              | Approve, reject, or cancel gated tool execution               |
-| `1` / `2` / `3`              | Submit Correct (+1), Partial (0), or Incorrect (-1) feedback  |
-| `Esc`                        | Dismiss modal prompts (approval or feedback)                  |
+| Shortcut                     | Action                                                       |
+| ---------------------------- | ------------------------------------------------------------ |
+| `Enter`                      | Submit prompt to agent                                       |
+| `\` at end of line + `Enter` | Insert newline for multiline input                           |
+| `Up Arrow`                   | Navigate backwards through command history                   |
+| `Down Arrow`                 | Navigate forwards through command history                    |
+| `Ctrl + O`                   | Toggle collapsible thinking & multi-line tool output details |
+| `Ctrl + C` (while running)   | Cancel ongoing agent task                                    |
+| `Ctrl + C` (while idle)      | Exit Evolve CLI                                              |
+| `Y` / `N` / `C`              | Approve, reject, or cancel gated tool execution              |
+| `1` / `2` / `3`              | Submit Correct (+1), Partial (0), or Incorrect (-1) feedback |
+| `Esc`                        | Dismiss modal prompts (approval or feedback)                 |
 
 ---
 

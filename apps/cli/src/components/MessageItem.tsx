@@ -112,16 +112,67 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     case 'tool_result': {
       const isSuccess = message.toolSuccess ?? true;
       const duration = message.toolDurationMs ? ` (${message.toolDurationMs}ms)` : '';
+      const lines = message.content ? message.content.trim().split('\n') : [];
+      const lineCount = lines.length;
+      const isMultiLine = lineCount > 1 || message.content.length > 80;
+
+      if (!isMultiLine) {
+        return (
+          <Box paddingLeft={4} marginY={0}>
+            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error}>
+              {isSuccess ? Theme.icons.check : Theme.icons.cross}
+            </Text>
+            <Text color={Theme.colors.dim}>
+              {' '}
+              {isSuccess ? 'Completed' : 'Failed'}
+              {duration}: {message.content}
+            </Text>
+          </Box>
+        );
+      }
+
+      // Multi-line output (like read_file, list_files, run_command)
+      // When collapsed: show compact summary with line/item count and Ctrl+O hint
+      if (!isThinkingExpanded) {
+        const countLabel =
+          message.toolName === 'list_files' ? `${lineCount} items` : `${lineCount} lines`;
+        return (
+          <Box paddingLeft={4} marginY={0}>
+            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error}>
+              {isSuccess ? Theme.icons.check : Theme.icons.cross}
+            </Text>
+            <Text color={Theme.colors.dim}>
+              {' '}
+              {isSuccess ? 'Completed' : 'Failed'}
+              {duration} ({countLabel} hidden • Ctrl+O to expand)
+            </Text>
+          </Box>
+        );
+      }
+
+      // When expanded (isThinkingExpanded === true): show full content in a bordered box
       return (
-        <Box paddingLeft={4} marginY={0}>
-          <Text color={isSuccess ? Theme.colors.success : Theme.colors.error}>
-            {isSuccess ? Theme.icons.check : Theme.icons.cross}
-          </Text>
-          <Text color={Theme.colors.dim}>
-            {' '}
-            {isSuccess ? 'Completed' : 'Failed'}
-            {duration}: {message.content}
-          </Text>
+        <Box
+          flexDirection="column"
+          borderStyle="single"
+          borderColor={Theme.colors.border}
+          paddingX={1}
+          paddingY={0}
+          marginLeft={4}
+          marginY={0}
+        >
+          <Box justifyContent="space-between">
+            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error} bold>
+              {isSuccess ? Theme.icons.check : Theme.icons.cross} {message.toolName || 'Tool'}{' '}
+              Output ({lineCount} lines){duration}
+            </Text>
+            <Text color={Theme.colors.dim} dimColor>
+              Ctrl+O to collapse
+            </Text>
+          </Box>
+          <Box marginTop={0}>
+            <Text color={Theme.colors.dim}>{message.content}</Text>
+          </Box>
         </Box>
       );
     }

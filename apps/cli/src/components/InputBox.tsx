@@ -138,7 +138,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       </Box>
       <Box justifyContent="space-between" marginTop={0}>
         <Text color={Theme.colors.dim} dimColor>
-          Enter: send • Ctrl+O: toggle thinking • /help: commands
+          Enter: send • Ctrl+O: toggle details • /help: commands
         </Text>
         {isLoading && (
           <Text color={Theme.colors.dim} dimColor>
