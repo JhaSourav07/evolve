@@ -50,15 +50,18 @@ export function buildCli(): Command {
     .version(info.version);
 
   // Default action: Launch interactive mode
-  program.action(async () => {
-    await runChatCommand();
-  });
+  program
+    .option('-m, --model <model>', 'Ollama model to use')
+    .action(async (opts: { model?: string }) => {
+      await runChatCommand(undefined, opts.model);
+    });
 
   program
     .command('chat [prompt]')
     .description('Start interactive conversation or execute a single task prompt')
-    .action(async (prompt?: string) => {
-      await runChatCommand(prompt);
+    .option('-m, --model <model>', 'Ollama model to use')
+    .action(async (prompt?: string, opts?: { model?: string }) => {
+      await runChatCommand(prompt, opts?.model);
     });
 
   program

@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, useApp } from 'ink';
 import type { EventEnvelope, ToolApprovalRequest } from '@evolve/core';
+import type { AgentRuntime } from '@evolve/agent';
 import { Header } from '../components/Header.js';
 import { HistoryList, type SessionSummary } from '../components/HistoryList.js';
 import { InputBox } from '../components/InputBox.js';
 import { IntegrationsList, type IntegrationStatusItem } from '../components/IntegrationsList.js';
 import { MemoryList, type MemoryEntry } from '../components/MemoryList.js';
 import { MessageItem, type ChatMessage } from '../components/MessageItem.js';
-import { ModelsList, type ModelItem } from '../components/ModelsList.js';
+import { ModelSelectPrompt, type ModelOption } from '../components/ModelSelectPrompt.js';
+import { ModelsList } from '../components/ModelsList.js';
 import { StatusCard, type StatusData } from '../components/StatusCard.js';
 import { ToolApprovalPrompt } from '../components/ToolApprovalPrompt.js';
 import { FeedbackPrompt } from '../components/FeedbackPrompt.js';
@@ -16,17 +18,30 @@ import type { CliContext } from '../context.js';
 export interface InteractiveAppProps {
   context: CliContext;
   initialPrompt?: string | undefined;
+  initialModel?: string | undefined;
   initialScreen?:
-    ('chat' | 'status' | 'history' | 'memory' | 'integrations' | 'models') | undefined;
+    | ('chat' | 'status' | 'history' | 'memory' | 'integrations' | 'models' | 'model_select')
+    | undefined;
 }
 
 export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   context,
   initialPrompt,
-  initialScreen = 'chat',
+  initialModel,
+  initialScreen,
 }) => {
   const { exit } = useApp();
-  const [screen, setScreen] = useState<string>(initialScreen);
+
+  // Active Ollama model name
+  const [activeModel, setActiveModel] = useState<string>(initialModel || context.getModel());
+
+  // Determine initial screen: if user provided prompt or explicit model, start in chat; otherwise scan & select
+  const [screen, setScreen] = useState<string>(() => {
+    if (initialScreen) return initialScreen;
+    if (initialModel || initialPrompt) return 'chat';
+    return 'model_select';
+  });
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -54,21 +69,44 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   // Abort controller ref for cancellation
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Persistent runtime ref for multi-turn conversation memory
+  const runtimeRef = useRef<AgentRuntime | null>(null);
+
+  // Discovered models list
+  const [modelsList, setModelsList] = useState<ModelOption[]>([]);
+
   // Data for secondary screens
   const [statusData, setStatusData] = useState<StatusData | null>(null);
   const [historySessions, setHistorySessions] = useState<SessionSummary[]>([]);
   const [memoriesList, setMemoriesList] = useState<MemoryEntry[]>([]);
-  const [modelsList, setModelsList] = useState<ModelItem[]>([]);
 
-  // Check health and git status on startup
+  // Function to scan and discover Ollama models
+  const scanModelsAndHealth = async (): Promise<ModelOption[]> => {
+    const health = await context.provider.checkHealth();
+    setIsOnline(health.isHealthy);
+
+    try {
+      const discovered = await context.discoverModels();
+      const options: ModelOption[] = discovered.map((m) => ({
+        name: m.name,
+        size: m.size ? `${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB` : undefined,
+        parameterSize: m.parameterSize,
+        quantizationLevel: m.quantizationLevel,
+      }));
+      setModelsList(options);
+      return options;
+    } catch {
+      setModelsList([]);
+      return [];
+    }
+  };
+
+  // Check health, discover models, and verify git on startup
   useEffect(() => {
     let mounted = true;
 
-    async function checkHealth() {
-      const health = await context.provider.checkHealth();
-      if (mounted) {
-        setIsOnline(health.isHealthy);
-      }
+    async function init() {
+      const options = await scanModelsAndHealth();
 
       // Check git status
       try {
@@ -90,19 +128,59 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       } catch {
         // Not a git repo
       }
+
+      if (!mounted) return;
+
+      const modelExists = options.some((m) => m.name === activeModel);
+      if (!modelExists && options.length > 0) {
+        // Auto-select preferred coding or qwen model if default is missing
+        const preferred =
+          options.find((m) => m.name.toLowerCase().includes('coder')) ||
+          options.find((m) => m.name.toLowerCase().includes('qwen')) ||
+          options[0];
+        if (preferred) {
+          context.setModel(preferred.name);
+          setActiveModel(preferred.name);
+        }
+      }
+
+      // If initialPrompt provided, execute it immediately with the effective model
+      if (initialPrompt && initialPrompt.trim()) {
+        setScreen('chat');
+        handleUserPrompt(initialPrompt.trim());
+      } else if (!initialModel && options.length > 0 && screen === 'model_select') {
+        // Stay on model_select to let user choose
+        setScreen('model_select');
+      }
     }
 
-    checkHealth();
-
-    // If an initial prompt was provided, run it immediately
-    if (initialPrompt && initialPrompt.trim()) {
-      handleUserPrompt(initialPrompt.trim());
-    }
+    init();
 
     return () => {
       mounted = false;
     };
   }, []);
+
+  const selectModelAndStart = (modelName: string) => {
+    context.setModel(modelName);
+    setActiveModel(modelName);
+    // Reset runtime so next prompt uses the new model
+    runtimeRef.current = null;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys_${Date.now()}`,
+        role: 'system',
+        content: `Active model set to: ${modelName}. Ready for your requests.`,
+        timestamp: Date.now(),
+      },
+    ]);
+    setScreen('chat');
+
+    if (initialPrompt && initialPrompt.trim()) {
+      handleUserPrompt(initialPrompt.trim());
+    }
+  };
 
   const handleUserPrompt = async (promptText: string) => {
     // 1. Handle Slash Commands
@@ -126,21 +204,28 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     abortControllerRef.current = abortController;
 
     try {
-      // 3. Create AgentRuntime with interactive approval handler
-      const runtime = context.createAgentRuntime(sessionId, async (req: ToolApprovalRequest) => {
-        return new Promise<boolean>((resolve) => {
-          setPendingApproval({
-            toolName: req.toolName,
-            parameters: req.params,
-            resolve: (approved: boolean) => {
-              setPendingApproval(null);
-              resolve(approved);
-            },
-          });
-        });
-      });
+      // 3. Obtain or initialize AgentRuntime (preserves multi-turn conversation)
+      if (!runtimeRef.current) {
+        runtimeRef.current = context.createAgentRuntime(
+          sessionId,
+          async (req: ToolApprovalRequest) => {
+            return new Promise<boolean>((resolve) => {
+              setPendingApproval({
+                toolName: req.toolName,
+                parameters: req.params,
+                resolve: (approved: boolean) => {
+                  setPendingApproval(null);
+                  resolve(approved);
+                },
+              });
+            });
+          },
+        );
+      }
 
-      // Listen for runtime events to stream tool progress
+      const runtime = runtimeRef.current;
+
+      // Listen for runtime events to display tool actions and streaming responses
       const unsub = runtime.onAny((event: EventEnvelope) => {
         if (event.type === 'tool_call') {
           const payload = event.payload as { toolName: string; arguments: Record<string, unknown> };
@@ -184,23 +269,37 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       unsub();
 
-      // 5. Add final response
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `asst_${Date.now()}`,
-          role: 'assistant',
-          content: result.finalResponse || 'Task completed.',
-          timestamp: Date.now(),
-        },
-      ]);
+      // 5. Add response to UI (Strictly avoid echoing user prompt on error)
+      if (!result.success) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err_${Date.now()}`,
+            role: 'error',
+            content: result.error || 'Agent execution failed without model response.',
+            recoveryHint:
+              'Verify that Ollama is running (`ollama serve`) and the model is loaded (`ollama ps`). You can switch models with /model.',
+            timestamp: Date.now(),
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `asst_${Date.now()}`,
+            role: 'assistant',
+            content: result.finalResponse || 'Task completed.',
+            timestamp: Date.now(),
+          },
+        ]);
+      }
     } catch (err: unknown) {
       const errMessage = err instanceof Error ? err.message : String(err);
       const isAbort = errMessage.includes('abort') || abortController.signal.aborted;
 
       const recovery = isAbort
         ? undefined
-        : 'Check that Ollama is running (`ollama serve`) and the model is pulled (`ollama pull qwen2.5-coder:7b`).';
+        : `Check that Ollama is running and model "${activeModel}" is available. Use /model to switch.`;
 
       setMessages((prev) => [
         ...prev,
@@ -218,9 +317,16 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     }
   };
 
-  const handleSlashCommand = (cmdText: string) => {
-    const [rawCmd] = cmdText.trim().split(' ');
-    const cmd = rawCmd?.toLowerCase();
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
+  const handleSlashCommand = async (cmdText: string) => {
+    const parts = cmdText.trim().split(/\s+/);
+    const cmd = parts[0]?.toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
 
     switch (cmd) {
       case '/help':
@@ -232,6 +338,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             content: [
               'Evolve CLI Commands:',
               '  /chat            - Return to active chat view',
+              '  /model [name/#]  - Select or switch active Ollama model',
               '  /status          - Show system and project status dashboard',
               '  /history         - View previous sessions',
               '  /memory          - View project conventions and stored experiences',
@@ -247,6 +354,35 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         ]);
         break;
 
+      case '/model':
+      case '/models': {
+        const models = await scanModelsAndHealth();
+        if (arg.length > 0) {
+          // If argument is a number 1..N
+          const num = parseInt(arg, 10);
+          if (!isNaN(num) && num >= 1 && num <= models.length) {
+            const chosen = models[num - 1];
+            if (chosen) {
+              selectModelAndStart(chosen.name);
+              return;
+            }
+          }
+          // If argument is model name
+          const matched = models.find(
+            (m) =>
+              m.name.toLowerCase() === arg.toLowerCase() ||
+              m.name.toLowerCase().includes(arg.toLowerCase()),
+          );
+          if (matched) {
+            selectModelAndStart(matched.name);
+            return;
+          }
+        }
+        // Otherwise switch to interactive model selection screen
+        setScreen('model_select');
+        break;
+      }
+
       case '/clear':
         setMessages([]);
         setScreen('chat');
@@ -255,6 +391,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       case '/new': {
         const newSid = context.createSession();
         setSessionId(newSid);
+        runtimeRef.current = null;
         setMessages([
           {
             id: `sys_${Date.now()}`,
@@ -284,11 +421,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       case '/integrations':
         setScreen('integrations');
-        break;
-
-      case '/models':
-        loadModelsData();
-        setScreen('models');
         break;
 
       case '/feedback':
@@ -329,8 +461,8 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       rootDir: context.rootDir,
       gitBranch: gitBranch ?? undefined,
       gitClean,
-      provider: context.config.model.provider,
-      model: context.config.model.model,
+      provider: 'ollama',
+      model: activeModel,
       isOnline,
       sessionId,
       sessionCount: sessions.length,
@@ -347,74 +479,51 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   };
 
   const loadHistoryData = () => {
-    const list = context.sessionRepo.listByProject(context.projectId);
-    setHistorySessions(
-      list.map((s) => ({
-        id: s.id,
-        goal: s.goal,
-        status: s.status,
-        createdAt: s.createdAt,
-      })),
-    );
+    const sessions = context.sessionRepo.listByProject(context.projectId);
+    const summaries: SessionSummary[] = sessions.map((s) => ({
+      id: s.id,
+      goal: s.goal,
+      status: s.status,
+      createdAt: s.createdAt,
+    }));
+    setHistorySessions(summaries);
   };
 
   const loadMemoryData = () => {
-    const list = context.memoryService.search('', { projectId: context.projectId, limit: 50 });
-    setMemoriesList(
-      list.map((m) => ({
-        id: m.id,
-        category: m.category,
-        key: m.key,
-        content: m.content,
-      })),
-    );
-  };
-
-  const loadModelsData = async () => {
-    try {
-      const discovered = await context.provider.listModels();
-      setModelsList(
-        discovered.map((m) => ({
-          name: m.name,
-          size: m.size ? `${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB` : undefined,
-          modifiedAt: m.modifiedAt,
-          isActive: m.name === context.config.model.model,
-        })),
-      );
-    } catch {
-      setModelsList([]);
-    }
-  };
-
-  const handleCancel = () => {
-    if (isLoading && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    } else {
-      context.close();
-      exit();
-    }
+    const memories = context.memoryService.search('', { projectId: context.projectId, limit: 50 });
+    const entries: MemoryEntry[] = memories.map((m) => ({
+      id: m.id,
+      category: m.category,
+      key: m.key,
+      content: m.content,
+    }));
+    setMemoriesList(entries);
   };
 
   const handleFeedbackSubmit = (rating: number, notes?: string, correction?: string) => {
-    context.feedbackService.record({
-      sessionId,
-      targetType: 'response',
-      rating,
-      type: 'human',
-      notes,
-      correction,
-      isTechnicallyCorrect: rating === 1,
-    });
     setShowFeedback(false);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `fb_msg_${Date.now()}`,
-        role: 'system',
-        content: `Feedback recorded: ${rating === 1 ? 'Correct (+1)' : rating === 0 ? 'Partially Correct (0)' : 'Incorrect (-1)'}${notes ? ` - "${notes}"` : ''}`,
-        timestamp: Date.now(),
-      },
-    ]);
+    try {
+      context.feedbackService.record({
+        sessionId,
+        targetType: 'response',
+        rating,
+        type: 'human',
+        ...(notes ? { notes } : {}),
+        ...(correction ? { correction } : {}),
+        isTechnicallyCorrect: rating === 1,
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `fb_${Date.now()}`,
+          role: 'system',
+          content: `Feedback recorded: ${rating === 1 ? 'Correct (+1)' : rating === 0 ? 'Partially Correct (0)' : 'Incorrect (-1)'}${notes ? ` - "${notes}"` : ''}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch {
+      // Feedback record error handled silently
+    }
   };
 
   const integrationItems: IntegrationStatusItem[] = [
@@ -464,7 +573,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     <Box flexDirection="column" padding={1}>
       <Header
         projectName={context.rootDir.split('/').pop() || 'Evolve Project'}
-        model={context.config.model.model}
+        model={activeModel}
         gitBranch={gitBranch}
         isOnline={isOnline}
         activeScreen={screen}
@@ -479,6 +588,24 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         </Box>
       )}
 
+      {screen === 'model_select' && (
+        <ModelSelectPrompt
+          models={modelsList}
+          isOnline={isOnline}
+          providerUrl={context.config.model.baseUrl}
+          currentModel={activeModel}
+          onSelect={selectModelAndStart}
+          onCancel={() => {
+            if (messages.length > 1) {
+              setScreen('chat');
+            } else {
+              exit();
+            }
+          }}
+          onRetry={scanModelsAndHealth}
+        />
+      )}
+
       {screen === 'status' && statusData && <StatusCard status={statusData} />}
 
       {screen === 'history' && <HistoryList sessions={historySessions} />}
@@ -489,7 +616,11 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       {screen === 'models' && (
         <ModelsList
-          models={modelsList}
+          models={modelsList.map((m) => ({
+            name: m.name,
+            size: m.size,
+            isActive: m.name === activeModel,
+          }))}
           isOnline={isOnline}
           providerUrl={context.config.model.baseUrl}
         />
@@ -515,8 +646,8 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         />
       )}
 
-      {/* Primary Input Box */}
-      {!pendingApproval && !showFeedback && (
+      {/* Primary Input Box (Only visible when chatting and not prompting) */}
+      {screen === 'chat' && !pendingApproval && !showFeedback && (
         <InputBox onSubmit={handleUserPrompt} isLoading={isLoading} onCancel={handleCancel} />
       )}
     </Box>

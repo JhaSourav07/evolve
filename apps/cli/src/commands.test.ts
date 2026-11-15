@@ -61,4 +61,13 @@ describe('CLI Commands Unit Tests', () => {
 
     await expect(runFeedbackCommand()).resolves.not.toThrow();
   });
+
+  it('supports dynamic model setting and querying in CliContext', () => {
+    const context = new CliContext({ rootDir: tempDir, modelName: 'custom-model:latest' });
+    expect(context.getModel()).toBe('custom-model:latest');
+
+    context.setModel('qwen3.5:9b');
+    expect(context.getModel()).toBe('qwen3.5:9b');
+    context.close();
+  });
 });

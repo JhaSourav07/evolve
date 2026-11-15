@@ -412,6 +412,92 @@ describe('AgentRuntime', () => {
       close();
     }
   });
+
+  it('never echoes the user prompt as finalResponse when model invocation fails', async () => {
+    provider.generate = async () => {
+      throw new Error('Model "qwen2.5-coder:7b" not found');
+    };
+
+    const runtime = new AgentRuntime({
+      provider,
+      tools,
+      config: { workspaceRoot: tmpDir },
+    });
+
+    const userPrompt = 'Analyse this confidential codebase for me';
+    const result = await runtime.run(userPrompt);
+
+    expect(result.success).toBe(false);
+    // Critical regression assertion: finalResponse MUST NOT equal user prompt!
+    expect(result.finalResponse).not.toBe(userPrompt);
+    expect(result.finalResponse).toBe('');
+    expect(result.error).toContain('Model invocation failed: Model "qwen2.5-coder:7b" not found');
+  });
+
+  it('preserves multi-turn conversation history across consecutive runs on the same runtime', async () => {
+    const runtime = new AgentRuntime({
+      provider,
+      tools,
+      config: { workspaceRoot: tmpDir },
+    });
+
+    // Turn 1
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Turn 1 assistant answer.' },
+    });
+
+    const res1 = await runtime.run('Turn 1 user question');
+    expect(res1.success).toBe(true);
+    expect(res1.finalResponse).toBe('Turn 1 assistant answer.');
+
+    // Turn 2
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Turn 2 assistant answer with memory.' },
+    });
+
+    const res2 = await runtime.run('Turn 2 user question');
+    expect(res2.success).toBe(true);
+    expect(res2.finalResponse).toBe('Turn 2 assistant answer with memory.');
+
+    // Check messages in conversation manager
+    const messages = runtime.getConversation().getMessages();
+    expect(messages).toHaveLength(4);
+    expect(messages[0]?.role).toBe('user');
+    expect(messages[0]?.content).toBe('Turn 1 user question');
+    expect(messages[1]?.role).toBe('assistant');
+    expect(messages[1]?.content).toBe('Turn 1 assistant answer.');
+    expect(messages[2]?.role).toBe('user');
+    expect(messages[2]?.content).toBe('Turn 2 user question');
+    expect(messages[3]?.role).toBe('assistant');
+    expect(messages[3]?.content).toBe('Turn 2 assistant answer with memory.');
+  });
+
+  it('emits session_started only once for multi-turn sessions', async () => {
+    const events: EventEnvelope[] = [];
+    const runtime = new AgentRuntime({
+      provider,
+      tools,
+      config: { workspaceRoot: tmpDir },
+    });
+    runtime.onAny((e) => events.push(e));
+
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Answer 1' },
+    });
+    await runtime.run('Hello');
+
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Answer 2' },
+    });
+    await runtime.run('Followup');
+
+    const sessionStartedEvents = events.filter((e) => e.type === 'session_started');
+    expect(sessionStartedEvents).toHaveLength(1);
+  });
 });
 
 describe('ContextManager', () => {

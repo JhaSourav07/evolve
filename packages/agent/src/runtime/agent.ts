@@ -132,17 +132,26 @@ export class AgentRuntime {
       this.contextManager.injectMemories(options.memories);
     }
 
-    // 2. Emit session_started
-    this.emitEvent(sessionId, 'session_started', {
-      goal: prompt,
-      workspaceRoot: this.config.workspaceRoot,
-      modelConfig: {
-        provider: this.provider.name,
-        ...(this.config.temperature !== undefined ? { temperature: this.config.temperature } : {}),
-      },
-    });
+    // 2. Emit session_started if first turn in conversation
+    const providerAny = this.provider as unknown as { getModel?: () => string };
+    const activeModelName =
+      typeof providerAny.getModel === 'function' ? providerAny.getModel() : this.provider.name;
 
-    // 2. Emit user_prompt & append to conversation
+    if (this.conversation.count() === 0) {
+      this.emitEvent(sessionId, 'session_started', {
+        goal: prompt,
+        workspaceRoot: this.config.workspaceRoot,
+        modelConfig: {
+          model: activeModelName,
+          provider: this.provider.name,
+          ...(this.config.temperature !== undefined
+            ? { temperature: this.config.temperature }
+            : {}),
+        },
+      });
+    }
+
+    // 3. Emit user_prompt & append to conversation
     this.emitEvent(sessionId, 'user_prompt', {
       prompt,
       context: {
@@ -151,7 +160,7 @@ export class AgentRuntime {
     });
     this.conversation.addUserMessage(prompt);
 
-    // 3. Agent Execution Loop
+    // 4. Agent Execution Loop
     while (step < maxSteps) {
       step++;
 
@@ -167,7 +176,7 @@ export class AgentRuntime {
         return {
           sessionId,
           success: false,
-          finalResponse: this.conversation.getLastMessage()?.content ?? '',
+          finalResponse: this.conversation.getLastAssistantMessage()?.content ?? '',
           stepsExecuted: step,
           durationMs,
           error,
@@ -205,7 +214,7 @@ export class AgentRuntime {
         return {
           sessionId,
           success: false,
-          finalResponse: this.conversation.getLastMessage()?.content ?? '',
+          finalResponse: this.conversation.getLastAssistantMessage()?.content ?? '',
           stepsExecuted: step,
           durationMs,
           error,
@@ -218,7 +227,7 @@ export class AgentRuntime {
       // Emit assistant_response
       this.emitEvent(sessionId, 'assistant_response', {
         content: assistantMessage.content,
-        model: this.provider.name,
+        model: activeModelName,
         finishReason: response.finishReason,
       });
 
@@ -325,7 +334,7 @@ export class AgentRuntime {
     return {
       sessionId,
       success: false,
-      finalResponse: this.conversation.getLastMessage()?.content ?? '',
+      finalResponse: this.conversation.getLastAssistantMessage()?.content ?? '',
       stepsExecuted: step,
       durationMs,
       error: limitError,

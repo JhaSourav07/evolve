@@ -21,10 +21,10 @@ import {
 import { ConsentManager, TerminalAdapter } from '@evolve/integrations';
 
 export interface CliContextOptions {
-  rootDir?: string;
-  dbPath?: string;
-  approvalHandler?: ToolApprovalHandler;
-  modelName?: string;
+  rootDir?: string | undefined;
+  dbPath?: string | undefined;
+  approvalHandler?: ToolApprovalHandler | undefined;
+  modelName?: string | undefined;
 }
 
 export class CliContext {
@@ -90,11 +90,25 @@ export class CliContext {
     });
     this.terminalAdapter = new TerminalAdapter(this.consentManager, this.eventService);
 
-    // 7. Ollama Model Provider
+    // 7. Ollama Model Provider (dynamic, unhardcoded model selection)
+    const initialModel = options.modelName || this.config.model.model;
     this.provider = new OllamaProvider({
-      model: this.config.model.model,
+      model: initialModel,
       baseUrl: this.config.model.baseUrl,
+      timeoutMs: 120_000,
     });
+  }
+
+  public setModel(model: string): void {
+    this.provider.setModel(model);
+  }
+
+  public getModel(): string {
+    return this.provider.getModel();
+  }
+
+  public async discoverModels() {
+    return this.provider.listModels();
   }
 
   public createSession(goal: string = 'Interactive CLI Session'): SessionId {

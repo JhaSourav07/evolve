@@ -103,6 +103,28 @@ describe('OllamaProvider Unit Tests (Mocked Network)', () => {
     );
   });
 
+  it('extracts thinking fallback when content is empty in reasoning models', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model: 'qwen3.5:9b',
+          message: {
+            role: 'assistant',
+            content: '',
+            thinking: 'Step-by-step reasoning completed successfully.',
+          },
+          done_reason: 'stop',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const provider = new OllamaProvider({ model: 'qwen3.5:9b' });
+    const response = await provider.generate([{ role: 'user', content: 'Think about this' }]);
+
+    expect(response.message.content).toBe('Step-by-step reasoning completed successfully.');
+  });
+
   it('streams NDJSON chunks from Ollama endpoint', async () => {
     const ndjson = [
       JSON.stringify({ message: { content: 'Thinking' }, done: false }),

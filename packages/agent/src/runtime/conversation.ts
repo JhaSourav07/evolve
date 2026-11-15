@@ -46,6 +46,15 @@ export class ConversationManager {
     return this.messages[this.messages.length - 1];
   }
 
+  public getLastAssistantMessage(): ModelMessage | undefined {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i]?.role === 'assistant') {
+        return this.messages[i];
+      }
+    }
+    return undefined;
+  }
+
   public count(): number {
     return this.messages.length;
   }

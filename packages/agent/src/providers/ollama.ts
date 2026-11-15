@@ -175,7 +175,7 @@ export class OllamaProvider implements ModelProvider {
     const body = this.buildRequestBody(messages, options, false);
     const raw = await this.executeChatRequest<RawOllamaResponse>(body, options?.signal);
 
-    const content = raw.message?.content || '';
+    const content = raw.message?.content || raw.message?.thinking || '';
     const rawToolCalls = raw.message?.tool_calls;
     const toolCalls = parseOllamaToolCalls(rawToolCalls, content);
 
@@ -231,7 +231,7 @@ export class OllamaProvider implements ModelProvider {
 
           try {
             const chunk = JSON.parse(trimmed) as RawOllamaResponse;
-            const delta = chunk.message?.content || '';
+            const delta = chunk.message?.content || chunk.message?.thinking || '';
             const isDone = Boolean(chunk.done);
 
             const toolCalls = parseOllamaToolCalls(chunk.message?.tool_calls, delta);
@@ -252,7 +252,7 @@ export class OllamaProvider implements ModelProvider {
       if (buffer.trim()) {
         try {
           const chunk = JSON.parse(buffer.trim()) as RawOllamaResponse;
-          const delta = chunk.message?.content || '';
+          const delta = chunk.message?.content || chunk.message?.thinking || '';
           const isDone = Boolean(chunk.done);
           const toolCalls = parseOllamaToolCalls(chunk.message?.tool_calls, delta);
 

@@ -106,3 +106,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Handled asynchronous cancellation via `AbortController` on Ctrl+C and slash commands (`/clear`, `/exit`, `/feedback`, `/help`, `/status`).
   - Added unit and integration tests for commands, context initialization, memory injection, and CLI options (122 total workspace tests passing).
   - Authored comprehensive terminal UI and CLI reference documentation (`docs/cli.md`).
+
+### Fixed
+
+- Fixed critical bug where interactive terminal UI echoed user input as assistant response instead of generating LLM replies:
+  - Eliminated fallback in `AgentRuntime` that returned the last conversation message (the user prompt) as `finalResponse` when model calls failed or were aborted.
+  - Added `getLastAssistantMessage()` to `ConversationManager` ensuring `finalResponse` only ever contains assistant-generated content.
+  - Updated `InteractiveApp` to strictly differentiate successful results from failures, rendering errors with diagnostic recovery hints rather than echoing user input.
+  - Implemented dynamic Ollama model scanning and interactive selection screen (`ModelSelectPrompt`) so users pick from installed models instead of failing on hardcoded defaults.
+  - Added multi-turn conversation memory persistence across turns within active sessions.
+  - Added thinking fallback handling in `OllamaProvider` for reasoning models where content is generated in thinking channels.
+  - Added regression test suites preventing silent user prompt echoes and verifying multi-turn conversation history.
