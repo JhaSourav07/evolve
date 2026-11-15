@@ -1,7 +1,7 @@
 {
   "name": "@evolve/cli",
   "version": "0.1.0",
-  "description": "Command-line interface for Evolve AI coding agent",
+  "description": "Interactive terminal user interface for the Evolve autonomous AI coding agent",
   "type": "module",
   "bin": {
     "evolve": "./dist/index.js"

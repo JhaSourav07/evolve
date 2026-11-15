@@ -2,7 +2,7 @@
   "name": "evolve-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first, self-improving AI coding agent built from scratch",
+  "description": "Autonomous, local-first, self-improving AI software engineer built from scratch with TypeScript, SQLite, and Ollama",
   "type": "module",
   "scripts": {
     "build": "tsc -b",
