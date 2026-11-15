@@ -1,0 +1,36 @@
+{
+  "name": "@evolve/db",
+  "version": "0.1.0",
+  "description": "SQLite local persistence layer and repositories for Evolve",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@evolve/core": "workspace:*",
+    "better-sqlite3": "^13.2.0",
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "database",
+    "sqlite",
+    "drizzle"
+  ],
+  "author": "Sourav Jha",
+  "license": "MIT"
+}

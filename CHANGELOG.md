@@ -23,5 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Strongly-typed event contracts (`AgentEventMap`, `EventBus`, `InMemoryEventBus`).
   - System logger interface and `NoOpLogger` implementation.
   - Validation utilities, `Result<T, E>` monad, and workspace path containment validator.
-- Updated `@evolve/cli` to consume core configuration schemas, IDs, and event bus.
-- Added 20 automated unit tests covering `@evolve/core` and `@evolve/cli`.
+- Implemented `@evolve/db` local persistence package:
+  - SQLite integration with Drizzle ORM and `better-sqlite3`.
+  - Enforced foreign key constraints (`PRAGMA foreign_keys = ON;`) and WAL mode.
+  - Transaction-safe migration runner with initial schema migration (`001_initial_schema`).
+  - Implemented 8 relational tables: `projects`, `sessions`, `events`, `tool_calls`, `feedback`, `knowledge`, `training_examples`, `model_versions`.
+  - Created typed repository classes for all domain entities with atomic transaction support.
+  - Implemented test database reset utility (`resetTestDatabase`).
+  - Added integration test suites for connections, migrations, and repositories (28 total workspace tests passing).
+- Updated documentation in `docs/database.md` and `docs/learning-notes.md`.
