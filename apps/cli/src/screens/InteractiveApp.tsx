@@ -72,6 +72,9 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   // Persistent runtime ref for multi-turn conversation memory
   const runtimeRef = useRef<AgentRuntime | null>(null);
 
+  // Collapsible thinking state (toggled via Ctrl+O or /thinking)
+  const [isThinkingExpanded, setIsThinkingExpanded] = useState<boolean>(false);
+
   // Discovered models list
   const [modelsList, setModelsList] = useState<ModelOption[]>([]);
 
@@ -289,6 +292,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             id: `asst_${Date.now()}`,
             role: 'assistant',
             content: result.finalResponse || 'Task completed.',
+            ...(result.thinking ? { thinking: result.thinking } : {}),
             timestamp: Date.now(),
           },
         ]);
@@ -339,6 +343,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               'Evolve CLI Commands:',
               '  /chat            - Return to active chat view',
               '  /model [name/#]  - Select or switch active Ollama model',
+              '  /thinking        - Toggle thinking process display (Shortcut: Ctrl+O)',
               '  /status          - Show system and project status dashboard',
               '  /history         - View previous sessions',
               '  /memory          - View project conventions and stored experiences',
@@ -352,6 +357,23 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             timestamp: Date.now(),
           },
         ]);
+        break;
+
+      case '/thinking':
+      case '/think':
+        setIsThinkingExpanded((prev) => {
+          const next = !prev;
+          setMessages((m) => [
+            ...m,
+            {
+              id: `sys_${Date.now()}`,
+              role: 'system',
+              content: `Thinking process view is now ${next ? 'EXPANDED' : 'COLLAPSED'}. (Shortcut: Ctrl+O)`,
+              timestamp: Date.now(),
+            },
+          ]);
+          return next;
+        });
         break;
 
       case '/model':
@@ -583,7 +605,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       {screen === 'chat' && (
         <Box flexDirection="column">
           {messages.map((msg) => (
-            <MessageItem key={msg.id} message={msg} />
+            <MessageItem key={msg.id} message={msg} isThinkingExpanded={isThinkingExpanded} />
           ))}
         </Box>
       )}
@@ -648,7 +670,12 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       {/* Primary Input Box (Only visible when chatting and not prompting) */}
       {screen === 'chat' && !pendingApproval && !showFeedback && (
-        <InputBox onSubmit={handleUserPrompt} isLoading={isLoading} onCancel={handleCancel} />
+        <InputBox
+          onSubmit={handleUserPrompt}
+          isLoading={isLoading}
+          onCancel={handleCancel}
+          onToggleThinking={() => setIsThinkingExpanded((prev) => !prev)}
+        />
       )}
     </Box>
   );

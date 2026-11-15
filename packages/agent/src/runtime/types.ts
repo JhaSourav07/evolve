@@ -50,6 +50,7 @@ export interface AgentRunResult {
   sessionId: SessionId;
   success: boolean;
   finalResponse: string;
+  thinking?: string | undefined;
   stepsExecuted: number;
   durationMs: number;
   error?: string | undefined;

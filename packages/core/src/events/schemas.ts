@@ -8,6 +8,7 @@ export const UserPromptPayloadSchema = z.object({
 export const AssistantResponsePayloadSchema = z.object({
   content: z.string(),
   model: z.string().optional(),
+  thinking: z.string().optional(),
   finishReason: z.string().optional(),
 });
 

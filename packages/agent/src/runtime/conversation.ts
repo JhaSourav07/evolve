@@ -21,10 +21,11 @@ export class ConversationManager {
     });
   }
 
-  public addAssistantMessage(content: string, toolCalls?: ToolCall[]): void {
+  public addAssistantMessage(content: string, toolCalls?: ToolCall[], thinking?: string): void {
     this.messages.push({
       role: 'assistant',
       content,
+      ...(thinking ? { thinking } : {}),
       ...(toolCalls && toolCalls.length > 0 ? { toolCalls } : {}),
     });
   }

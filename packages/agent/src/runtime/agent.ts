@@ -222,12 +222,17 @@ export class AgentRuntime {
       }
 
       const assistantMessage = response.message;
-      this.conversation.addAssistantMessage(assistantMessage.content, assistantMessage.toolCalls);
+      this.conversation.addAssistantMessage(
+        assistantMessage.content,
+        assistantMessage.toolCalls,
+        assistantMessage.thinking,
+      );
 
       // Emit assistant_response
       this.emitEvent(sessionId, 'assistant_response', {
         content: assistantMessage.content,
         model: activeModelName,
+        ...(assistantMessage.thinking ? { thinking: assistantMessage.thinking } : {}),
         finishReason: response.finishReason,
       });
 
@@ -247,6 +252,7 @@ export class AgentRuntime {
           sessionId,
           success: true,
           finalResponse: assistantMessage.content,
+          ...(assistantMessage.thinking ? { thinking: assistantMessage.thinking } : {}),
           stepsExecuted: step,
           durationMs,
         };

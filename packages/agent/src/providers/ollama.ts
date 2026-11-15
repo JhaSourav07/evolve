@@ -175,7 +175,22 @@ export class OllamaProvider implements ModelProvider {
     const body = this.buildRequestBody(messages, options, false);
     const raw = await this.executeChatRequest<RawOllamaResponse>(body, options?.signal);
 
-    const content = raw.message?.content || raw.message?.thinking || '';
+    let content = raw.message?.content || '';
+    let thinking = raw.message?.thinking || '';
+
+    // If inline <think> tags exist inside content, extract thinking
+    if (!thinking && content.includes('<think>')) {
+      const match = content.match(/<think>([\s\S]*?)<\/think>/);
+      if (match && match[1]) {
+        thinking = match[1].trim();
+        content = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+      }
+    }
+
+    if (!content && thinking) {
+      content = thinking;
+    }
+
     const rawToolCalls = raw.message?.tool_calls;
     const toolCalls = parseOllamaToolCalls(rawToolCalls, content);
 
@@ -188,6 +203,7 @@ export class OllamaProvider implements ModelProvider {
       message: {
         role: 'assistant',
         content,
+        ...(thinking ? { thinking } : {}),
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       },
       usage: {

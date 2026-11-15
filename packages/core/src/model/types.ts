@@ -14,6 +14,7 @@ export interface ModelMessage {
   name?: string;
   toolCalls?: ToolCall[];
   toolCallId?: ToolCallId;
+  thinking?: string;
 }
 
 export interface ModelUsage {

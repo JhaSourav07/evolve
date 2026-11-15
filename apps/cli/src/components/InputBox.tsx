@@ -6,6 +6,7 @@ export interface InputBoxProps {
   onSubmit: (text: string) => void;
   isLoading: boolean;
   onCancel?: () => void;
+  onToggleThinking?: () => void;
   placeholder?: string;
 }
 
@@ -13,6 +14,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   onSubmit,
   isLoading,
   onCancel,
+  onToggleThinking,
   placeholder = 'Ask Evolve to code, test, or refactor...',
 }) => {
   const [value, setValue] = useState('');
@@ -32,6 +34,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸'];
 
   useInput((input, key) => {
+    // Ctrl+O toggles thinking collapse / expand across states
+    if (key.ctrl && input.toLowerCase() === 'o') {
+      onToggleThinking?.();
+      return;
+    }
+
     if (isLoading) {
       if (key.ctrl && input.toLowerCase() === 'c') {
         onCancel?.();
@@ -130,7 +138,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       </Box>
       <Box justifyContent="space-between" marginTop={0}>
         <Text color={Theme.colors.dim} dimColor>
-          Enter: send • End with \: multiline • Up/Down: history • /help: commands
+          Enter: send • Ctrl+O: toggle thinking • /help: commands
         </Text>
         {isLoading && (
           <Text color={Theme.colors.dim} dimColor>

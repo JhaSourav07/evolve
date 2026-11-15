@@ -6,6 +6,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'system' | 'error';
   content: string;
+  thinking?: string | undefined;
   timestamp: number;
   toolName?: string | undefined;
   toolArgs?: Record<string, unknown> | undefined;
@@ -16,9 +17,13 @@ export interface ChatMessage {
 
 export interface MessageItemProps {
   message: ChatMessage;
+  isThinkingExpanded?: boolean | undefined;
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
+export const MessageItem: React.FC<MessageItemProps> = ({
+  message,
+  isThinkingExpanded = false,
+}) => {
   switch (message.role) {
     case 'user':
       return (
@@ -34,7 +39,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
         </Box>
       );
 
-    case 'assistant':
+    case 'assistant': {
+      const lineCount = message.thinking ? message.thinking.split('\n').length : 0;
       return (
         <Box flexDirection="column" marginY={1}>
           <Box>
@@ -42,11 +48,47 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
               {Theme.icons.sparkle} Evolve
             </Text>
           </Box>
-          <Box paddingLeft={2}>
+
+          {/* Collapsible Thinking Process Block */}
+          {message.thinking && message.thinking.trim().length > 0 && (
+            <Box marginY={0} paddingLeft={2} flexDirection="column">
+              {isThinkingExpanded ? (
+                <Box
+                  flexDirection="column"
+                  borderStyle="single"
+                  borderColor={Theme.colors.border}
+                  paddingX={1}
+                  paddingY={0}
+                  marginY={0}
+                >
+                  <Box justifyContent="space-between">
+                    <Text color={Theme.colors.accent} bold>
+                      💭 Thought Process ({lineCount} lines)
+                    </Text>
+                    <Text color={Theme.colors.dim} dimColor>
+                      Ctrl+O to collapse
+                    </Text>
+                  </Box>
+                  <Box marginTop={0}>
+                    <Text color={Theme.colors.dim} italic>
+                      {message.thinking}
+                    </Text>
+                  </Box>
+                </Box>
+              ) : (
+                <Text color={Theme.colors.dim} italic>
+                  💭 Thought process ({lineCount} lines hidden • Ctrl+O to expand)
+                </Text>
+              )}
+            </Box>
+          )}
+
+          <Box paddingLeft={2} marginTop={message.thinking ? 1 : 0}>
             <Text color={Theme.colors.assistant}>{message.content}</Text>
           </Box>
         </Box>
       );
+    }
 
     case 'tool_call':
       return (
