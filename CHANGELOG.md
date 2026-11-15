@@ -59,5 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added process execution sandbox with timeouts (`timeoutMs`), stream buffer capping (50KB), closed stdin, and two-stage `SIGTERM` -> `SIGKILL` escalation.
   - Implemented safe Git operations using direct `execFile` binary execution, `-C <workspaceRoot>` directory pinning, and `--` operand separators.
   - Added unit and integration tests covering normal usage, path traversal, sensitive file blocks, approval rejection, timeouts, output truncation, and Git flag injection (82 total workspace tests passing).
+- Implemented Evolve feedback and memory systems:
+  - Added migration `002_feedback_and_memory` adding action/response feedback targets, written corrections, technical correctness verification, and SQLite FTS5 full-text indexing.
+  - Implemented `FeedbackService` supporting action-level (`toolCallId`) and response-level (`sessionId`) feedback with positive (+1), partial (0), and negative (-1) ratings.
+  - Implemented written user corrections and strict separation between subjective human ratings and objective technical correctness (`isTechnicallyCorrect`).
+  - Implemented `convertToTrainingExample` turning verified human feedback into structured fine-tuning datasets with gold-standard corrections.
+  - Implemented `MemoryService` managing user preferences, project conventions, and experience memories.
+  - Integrated SQLite FTS5 BM25 keyword retrieval with query sanitization and prefix stemming.
+  - Integrated retrieved experiences into `AgentRuntime` and `ContextManager` system prompt construction.
+  - Added unit and integration tests for feedback recording, training example generation, FTS5 retrieval, and agent memory injection (96 total workspace tests passing).
+- Updated database architecture documentation (`docs/database.md`).
 - Updated security architecture documentation (`docs/security.md`).
 - Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.

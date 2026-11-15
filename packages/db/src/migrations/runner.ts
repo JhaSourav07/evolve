@@ -1,12 +1,13 @@
 import type Database from 'better-sqlite3';
 import { migration001 } from './001_initial.js';
+import { migration002 } from './002_feedback_and_memory.js';
 
 export interface Migration {
   id: string;
   up: string;
 }
 
-export const ALL_MIGRATIONS: readonly Migration[] = [migration001];
+export const ALL_MIGRATIONS: readonly Migration[] = [migration001, migration002];
 
 /**
  * Runs all pending migrations sequentially inside an atomic transaction.

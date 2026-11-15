@@ -12,15 +12,20 @@ export const feedback = sqliteTable(
     toolCallId: text('tool_call_id').references(() => toolCalls.id, {
       onDelete: 'set null',
     }),
-    type: text('type').notNull(), // 'human', 'automated_test', 'compiler_check'
-    rating: integer('rating'), // -1, 0, 1 or 1-5
+    targetType: text('target_type').notNull().default('response'), // 'action' | 'response'
+    type: text('type').notNull().default('human'), // 'human', 'automated_test', 'compiler_check'
+    rating: integer('rating'), // -1 (negative), 0 (partial), 1 (positive)
     notes: text('notes'),
+    correction: text('correction'), // Written user correction
+    isTechnicallyCorrect: integer('is_technically_correct', { mode: 'boolean' }),
+    metadata: text('metadata'), // JSON string
     createdAt: integer('created_at').notNull(),
   },
   (table) => [
     index('idx_feedback_session_id').on(table.sessionId),
     index('idx_feedback_tool_call_id').on(table.toolCallId),
     index('idx_feedback_type').on(table.type),
+    index('idx_feedback_target_type').on(table.targetType),
   ],
 );
 

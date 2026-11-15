@@ -8,9 +8,10 @@ export const knowledge = sqliteTable(
     projectId: text('project_id').references(() => projects.id, {
       onDelete: 'cascade',
     }),
-    category: text('category').notNull(), // 'syntax_fix', 'api_convention', 'project_rule', 'reflexion'
+    category: text('category').notNull(), // 'user_preference', 'project_rule', 'api_convention', 'experience', 'reflexion'
     key: text('key').notNull(),
     content: text('content').notNull(),
+    tags: text('tags'),
     confidence: real('confidence').notNull().default(1.0),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),

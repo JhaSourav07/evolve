@@ -13,6 +13,10 @@ export class FeedbackRepository {
     return created;
   }
 
+  public findById(id: string): FeedbackRecord | undefined {
+    return this.db.select().from(feedback).where(eq(feedback.id, id)).get();
+  }
+
   public listBySession(sessionId: string): FeedbackRecord[] {
     return this.db
       .select()

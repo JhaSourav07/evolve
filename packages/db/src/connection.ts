@@ -70,6 +70,11 @@ export function resetTestDatabase(sqlite: Database.Database): void {
     for (const table of tables) {
       sqlite.exec(`DELETE FROM ${table};`);
     }
+    try {
+      sqlite.exec('DELETE FROM memory_fts;');
+    } catch {
+      // ignore if memory_fts does not exist yet
+    }
     sqlite.pragma('foreign_keys = ON');
   });
 

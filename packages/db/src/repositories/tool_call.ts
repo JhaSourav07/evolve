@@ -19,6 +19,10 @@ export class ToolCallRepository {
     return created;
   }
 
+  public findById(id: string): ToolCallRecord | undefined {
+    return this.db.select().from(toolCalls).where(eq(toolCalls.id, id)).get();
+  }
+
   public completeCall(
     id: string,
     result: { output?: string; error?: string; status: 'success' | 'failed' },

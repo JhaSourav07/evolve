@@ -3,3 +3,5 @@ export * from './schema/index.js';
 export * from './migrations/runner.js';
 export * from './repositories/index.js';
 export * from './events/index.js';
+export * from './feedback/index.js';
+export * from './memory/index.js';

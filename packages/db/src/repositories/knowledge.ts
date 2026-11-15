@@ -31,6 +31,27 @@ export class KnowledgeRepository {
     return created;
   }
 
+  public findById(id: string): KnowledgeRecord | undefined {
+    return this.db.select().from(knowledge).where(eq(knowledge.id, id)).get();
+  }
+
+  public delete(id: string): boolean {
+    const deleted = this.db.delete(knowledge).where(eq(knowledge.id, id)).returning().get();
+    return Boolean(deleted);
+  }
+
+  public listAll(projectId?: string): KnowledgeRecord[] {
+    if (projectId) {
+      return this.db
+        .select()
+        .from(knowledge)
+        .where(eq(knowledge.projectId, projectId))
+        .orderBy(desc(knowledge.updatedAt))
+        .all();
+    }
+    return this.db.select().from(knowledge).orderBy(desc(knowledge.updatedAt)).all();
+  }
+
   public findByKey(key: string, projectId?: string): KnowledgeRecord | undefined {
     if (projectId) {
       return this.db

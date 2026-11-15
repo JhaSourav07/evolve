@@ -127,7 +127,12 @@ export class AgentRuntime {
 
     this.logger.info(`Starting agent session ${sessionId}`, { sessionId, prompt });
 
-    // 1. Emit session_started
+    // 1. Inject retrieved memories if provided
+    if (options?.memories && options.memories.length > 0) {
+      this.contextManager.injectMemories(options.memories);
+    }
+
+    // 2. Emit session_started
     this.emitEvent(sessionId, 'session_started', {
       goal: prompt,
       workspaceRoot: this.config.workspaceRoot,

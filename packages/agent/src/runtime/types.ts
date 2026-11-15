@@ -43,6 +43,7 @@ export interface AgentRuntimeOptions {
 export interface AgentRunOptions {
   signal?: AbortSignal | undefined;
   sessionId?: SessionId | undefined;
+  memories?: readonly { category: string; key: string; content: string }[] | undefined;
 }
 
 export interface AgentRunResult {

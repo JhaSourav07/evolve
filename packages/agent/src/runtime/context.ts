@@ -15,6 +15,7 @@ export class ContextManager {
   private readonly workspaceRoot: string;
   private readonly customSystemPrompt?: string | undefined;
   private readonly maxTokens: number;
+  private readonly injectedMemories: Array<{ category: string; key: string; content: string }> = [];
 
   constructor(options: ContextManagerOptions) {
     this.workspaceRoot = options.workspaceRoot;
@@ -22,22 +23,42 @@ export class ContextManager {
     this.maxTokens = options.maxTokens ?? 8192;
   }
 
+  public injectMemories(
+    memories: readonly { category: string; key: string; content: string }[],
+  ): void {
+    this.injectedMemories.push(...memories);
+  }
+
+  public clearInjectedMemories(): void {
+    this.injectedMemories.length = 0;
+  }
+
   public getSystemPrompt(): string {
-    if (this.customSystemPrompt) {
-      return this.customSystemPrompt;
+    const basePrompt =
+      this.customSystemPrompt ??
+      [
+        'You are Evolve, an autonomous AI software engineering agent designed to solve development tasks reliably.',
+        'You have access to tools to inspect your environment, read files, and write code.',
+        `Workspace root: ${this.workspaceRoot}`,
+        '',
+        'Operational Guidelines:',
+        '1. Analyze the user request thoroughly.',
+        '2. Use available tools whenever you need to explore or modify files.',
+        '3. Always inspect existing code before modifying or creating new files.',
+        '4. When your task is finished, provide a clear, concise final answer summarizing your solution without calling any more tools.',
+      ].join('\n');
+
+    if (this.injectedMemories.length === 0) {
+      return basePrompt;
     }
 
-    return [
-      'You are Evolve, an autonomous AI software engineering agent designed to solve development tasks reliably.',
-      'You have access to tools to inspect your environment, read files, and write code.',
-      `Workspace root: ${this.workspaceRoot}`,
+    const memoryLines = [
       '',
-      'Operational Guidelines:',
-      '1. Analyze the user request thoroughly.',
-      '2. Use available tools whenever you need to explore or modify files.',
-      '3. Always inspect existing code before modifying or creating new files.',
-      '4. When your task is finished, provide a clear, concise final answer summarizing your solution without calling any more tools.',
-    ].join('\n');
+      'Relevant Past Experiences & Project Preferences:',
+      ...this.injectedMemories.map((m) => `- [${m.category}] ${m.key}: ${m.content}`),
+    ];
+
+    return `${basePrompt}\n${memoryLines.join('\n')}`;
   }
 
   /**
