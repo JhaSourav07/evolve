@@ -1,48 +1,110 @@
 # Event System & Lifecycle
 
-## 1. Why an Event-Driven Architecture?
+## 1. Conceptual Foundations
 
-AI agents are asynchronous, long-running processes. Decoupling the cognitive loop from presentation (CLI) and storage (database) via a typed event bus provides:
+### What is Event-Driven Architecture?
 
-1. **Pluggable Observers**: The CLI can render streaming output and progress indicators, while the database records event traces independently without direct dependencies between them.
-2. **Deterministic Replay**: An execution can be replayed and inspected event-by-event for debugging and auditing.
-3. **Interception**: Events provide clear hook points to intercept running tasks (e.g., requesting user permission before tool execution).
+In an **Event-Driven Architecture (EDA)**, the flow of the program is determined by the production, detection, and consumption of **events**.
+
+- Components do not call each other directly; they emit notifications when state changes occur.
+- **Loose Coupling**: The agent runtime doesn't need to know whether the CLI, a database logger, an analytics dashboard, or a testing harness is listening.
+
+### What is an Event Emitter?
+
+An **Event Emitter** is an object that maintains a registry of listeners and dispatches messages to them synchronously or asynchronously when named events occur. Evolve's `InMemoryEventBus` provides typed event dispatching with subscriber fault isolation.
+
+### What is Event Sourcing?
+
+Instead of only storing the _current state_ of an entity (e.g. `session.status = 'completed'`), **Event Sourcing** records the full, immutable sequence of events that led to that state:
+$$\text{State} = \sum_{i=1}^{N} \text{Event}_i$$
+In Evolve, any past agent run can be reconstructed and replayed step-by-step from its event log.
+
+### What is the Difference Between an Event and a Database Record?
+
+- A **database record** represents the _current snapshot_ of mutable state (e.g. `status = "completed"`). Updating it overwrites the past.
+- An **event** is an _immutable statement of historical fact_ with a timestamp (e.g. `command_execution` followed by `execution_result`). Events can only be appended, never edited or deleted.
+
+### Why Must Raw Interactions Be Preserved?
+
+1. **Self-Improvement (Reflexion)**: To learn from mistakes, the agent must inspect exactly what prompt it received, what tool it called, and the raw compiler error that followed.
+2. **Deterministic Debugging**: When an agent goes off the rails, you can inspect the exact token sequence that led to the hallucination.
+3. **Auditability & Safety**: Complete transparency on what files were modified and what shell commands were executed.
 
 ---
 
-## 2. Strongly-Typed Event Map (`AgentEventMap`)
+## 2. Supported Core Events
 
-Every event in Evolve has an explicit type and strongly-typed payload defined in `@evolve/core`:
+Evolve implements strict Zod validation for 11 core event types:
 
-| Event Name           | Payload Description                                                                                                  |
-| :------------------- | :------------------------------------------------------------------------------------------------------------------- |
-| `session:started`    | `{ sessionId: SessionId; goal: string; timestamp: number }`                                                          |
-| `session:completed`  | `{ sessionId: SessionId; success: boolean; resultSummary?: string; timestamp: number }`                              |
-| `session:failed`     | `{ sessionId: SessionId; error: EvolveError; timestamp: number }`                                                    |
-| `model:request`      | `{ sessionId: SessionId; messageCount: number; timestamp: number }`                                                  |
-| `model:response`     | `{ sessionId: SessionId; finishReason: string; totalTokens?: number; timestamp: number }`                            |
-| `model:stream`       | `{ sessionId: SessionId; delta: string; timestamp: number }`                                                         |
-| `tool:executing`     | `{ sessionId: SessionId; toolCallId: ToolCallId; toolName: string; params: unknown; timestamp: number }`             |
-| `tool:completed`     | `{ sessionId: SessionId; toolCallId: ToolCallId; toolName: string; result: ToolExecutionResult; timestamp: number }` |
-| `tool:failed`        | `{ sessionId: SessionId; toolCallId: ToolCallId; toolName: string; error: string; timestamp: number }`               |
-| `reflection:created` | `{ sessionId: SessionId; critique: string; suggestion: string; timestamp: number }`                                  |
+| Event Type           | Purpose                                      | Payload Fields                                                       |
+| :------------------- | :------------------------------------------- | :------------------------------------------------------------------- |
+| `session_started`    | Initialization of a goal or task.            | `goal`, `workspaceRoot`, `modelConfig?`                              |
+| `user_prompt`        | Human input or instruction.                  | `prompt`, `context?`                                                 |
+| `assistant_response` | Model reasoning or conversation text.        | `content`, `model?`, `finishReason?`                                 |
+| `tool_call`          | Model requesting a discrete tool invocation. | `toolCallId`, `toolName`, `arguments`                                |
+| `tool_result`        | Output or error produced by a tool.          | `toolCallId`, `toolName`, `output?`, `error?`, `success`             |
+| `command_execution`  | Subprocess shell execution initiated.        | `commandId`, `command`, `cwd`, `timeoutMs?`                          |
+| `execution_result`   | Shell command exit code, stdout, and stderr. | `commandId`, `command`, `exitCode`, `stdout`, `stderr`, `durationMs` |
+| `human_feedback`     | Rating and critique from the user.           | `feedbackId`, `feedbackType`, `rating?`, `notes?`, `toolCallId?`     |
+| `solution_accepted`  | User accepts proposed solution.              | `summary`, `acceptedAt`, `filesChanged?`                             |
+| `solution_rejected`  | User rejects proposed solution.              | `reason`, `rejectedAt`, `feedback?`                                  |
+| `session_completed`  | End of agent task lifecycle.                 | `success`, `durationMs`, `summary?`, `error?`                        |
 
 ---
 
-## 3. The `EventBus` Interface & `InMemoryEventBus`
+## 3. The Complete Event Lifecycle
 
-The `@evolve/core` package provides both the contract (`EventBus`) and a zero-dependency reference implementation (`InMemoryEventBus`):
+```mermaid
+sequenceDiagram
+    participant User as Developer / CLI
+    participant ES as EventService
+    participant Val as Zod Validator
+    participant DB as SQLite (events table)
+    participant Bus as InMemoryEventBus
+    participant Sub as Subscribers (CLI / Observers)
+
+    User->>ES: publish(sessionId, 'tool_call', payload)
+    ES->>Val: validateEventPayload('tool_call', payload)
+    alt Payload Invalid
+        Val-->>ES: throws ValidationError
+        ES-->>User: Rejects publication (Nothing saved to DB)
+    else Payload Valid
+        Val-->>ES: Validated typed payload
+        ES->>DB: INSERT INTO events (id, session_id, type, payload, timestamp)
+        ES->>Bus: emit('tool_call', envelope)
+        Bus->>Sub: notify typed & wildcard listeners
+        ES-->>User: returns EventEnvelope<tool_call>
+    end
+```
+
+---
+
+## 4. Usage Example: `EventService`
 
 ```typescript
-import { InMemoryEventBus } from '@evolve/core';
+import { initDatabase, EventService } from '@evolve/db';
 
-const bus = new InMemoryEventBus();
+const { db } = initDatabase();
+const eventService = new EventService(db);
 
-// Strongly typed: payload is inferred based on event name
-const unsubscribe = bus.on('tool:executing', (payload) => {
-  console.log(`Tool starting: ${payload.toolName}`);
+// 1. Subscribe to specific event
+const unsubscribe = eventService.subscribeTo('tool_call', (envelope) => {
+  console.log(`Tool called: ${envelope.payload.toolName}`);
 });
 
-// Clean unsubscription
-unsubscribe();
+// 2. Publish validated event (persists to SQLite & notifies subscribers)
+const event = eventService.publish('sess_123', 'tool_call', {
+  toolCallId: 'call_1',
+  toolName: 'fs_read',
+  arguments: { path: 'package.json' },
+});
+
+// 3. Retrieve ordered session event history
+const history = eventService.getSessionEvents('sess_123');
+
+// 4. Filter events
+const commandEvents = eventService.filter({
+  sessionId: 'sess_123',
+  types: ['command_execution', 'execution_result'],
+});
 ```

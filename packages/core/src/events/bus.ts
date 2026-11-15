@@ -1,33 +1,52 @@
-import type { AgentEventMap, EventBus, EventListener, Unsubscribe } from './types.js';
+import type {
+  CoreEventType,
+  EventBus,
+  EventEnvelope,
+  EventListener,
+  Unsubscribe,
+} from './types.js';
 
 /**
- * High-performance, strongly-typed in-memory event bus.
- * Decouples agent execution from UI logging and persistence.
+ * Strongly-typed in-memory event bus with fault isolation and wildcard listener support.
  */
 export class InMemoryEventBus implements EventBus {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private readonly listeners: Map<keyof AgentEventMap, Set<EventListener<any>>> = new Map();
+  private readonly listeners: Map<CoreEventType, Set<EventListener<any>>> = new Map();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly anyListeners: Set<EventListener<any>> = new Set();
 
-  public emit<K extends keyof AgentEventMap>(event: K, payload: AgentEventMap[K]): void {
-    const eventListeners = this.listeners.get(event);
-    if (!eventListeners || eventListeners.size === 0) {
+  public emit<K extends CoreEventType>(event: K, envelope: EventEnvelope<K>): void {
+    // 1. Notify wildcard listeners
+    if (this.anyListeners.size > 0) {
+      const anyCopy = Array.from(this.anyListeners);
+      for (const listener of anyCopy) {
+        try {
+          listener(envelope);
+        } catch {
+          // Fault isolation: prevent subscriber error from breaking event loop
+        }
+      }
+    }
+
+    // 2. Notify specific event listeners
+    const specific = this.listeners.get(event);
+    if (!specific || specific.size === 0) {
       return;
     }
 
-    const listenersCopy = Array.from(eventListeners);
+    const listenersCopy = Array.from(specific);
     for (const listener of listenersCopy) {
       try {
-        listener(payload);
+        listener(envelope);
       } catch {
-        // Prevent subscriber errors from halting the agent loop
-        // In production, this can be piped to an internal diagnostic hook
+        // Fault isolation
       }
     }
   }
 
-  public on<K extends keyof AgentEventMap>(
+  public on<K extends CoreEventType>(
     event: K,
-    listener: EventListener<AgentEventMap[K]>,
+    listener: EventListener<EventEnvelope<K>>,
   ): Unsubscribe {
     let set = this.listeners.get(event);
     if (!set) {
@@ -41,21 +60,25 @@ export class InMemoryEventBus implements EventBus {
     };
   }
 
-  public once<K extends keyof AgentEventMap>(
+  public onAny(listener: EventListener<EventEnvelope>): Unsubscribe {
+    this.anyListeners.add(listener);
+    return () => {
+      this.anyListeners.delete(listener);
+    };
+  }
+
+  public once<K extends CoreEventType>(
     event: K,
-    listener: EventListener<AgentEventMap[K]>,
+    listener: EventListener<EventEnvelope<K>>,
   ): Unsubscribe {
-    const wrapped: EventListener<AgentEventMap[K]> = (payload) => {
+    const wrapped: EventListener<EventEnvelope<K>> = (envelope) => {
       this.off(event, wrapped);
-      listener(payload);
+      listener(envelope);
     };
     return this.on(event, wrapped);
   }
 
-  public off<K extends keyof AgentEventMap>(
-    event: K,
-    listener: EventListener<AgentEventMap[K]>,
-  ): void {
+  public off<K extends CoreEventType>(event: K, listener: EventListener<EventEnvelope<K>>): void {
     const set = this.listeners.get(event);
     if (set) {
       set.delete(listener);
@@ -65,11 +88,12 @@ export class InMemoryEventBus implements EventBus {
     }
   }
 
-  public removeAllListeners(event?: keyof AgentEventMap): void {
+  public removeAllListeners(event?: CoreEventType): void {
     if (event) {
       this.listeners.delete(event);
     } else {
       this.listeners.clear();
+      this.anyListeners.clear();
     }
   }
 }

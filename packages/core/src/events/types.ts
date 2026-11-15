@@ -1,71 +1,32 @@
-import type { EvolveError } from '../errors/index.js';
-import type { SessionId, ToolCallId } from '../ids/index.js';
-import type { ToolExecutionResult } from '../tools/index.js';
+import type { SessionId } from '../ids/index.js';
+import type { CoreEventType, EventPayloadMap } from './schemas.js';
 
-export interface AgentEventMap {
-  'session:started': { sessionId: SessionId; goal: string; timestamp: number };
-  'session:completed': {
-    sessionId: SessionId;
-    success: boolean;
-    resultSummary?: string;
-    timestamp: number;
-  };
-  'session:failed': { sessionId: SessionId; error: EvolveError; timestamp: number };
+export * from './schemas.js';
 
-  'model:request': { sessionId: SessionId; messageCount: number; timestamp: number };
-  'model:response': {
-    sessionId: SessionId;
-    finishReason: string;
-    totalTokens?: number;
-    timestamp: number;
-  };
-  'model:stream': { sessionId: SessionId; delta: string; timestamp: number };
-
-  'tool:executing': {
-    sessionId: SessionId;
-    toolCallId: ToolCallId;
-    toolName: string;
-    params: unknown;
-    timestamp: number;
-  };
-  'tool:completed': {
-    sessionId: SessionId;
-    toolCallId: ToolCallId;
-    toolName: string;
-    result: ToolExecutionResult;
-    timestamp: number;
-  };
-  'tool:failed': {
-    sessionId: SessionId;
-    toolCallId: ToolCallId;
-    toolName: string;
-    error: string;
-    timestamp: number;
-  };
-
-  'reflection:created': {
-    sessionId: SessionId;
-    critique: string;
-    suggestion: string;
-    timestamp: number;
-  };
+export interface EventEnvelope<TType extends CoreEventType = CoreEventType> {
+  id: string;
+  sessionId: SessionId;
+  type: TType;
+  timestamp: number;
+  payload: EventPayloadMap[TType];
 }
 
-export type EventType = keyof AgentEventMap;
+export interface EventFilterOptions {
+  sessionId?: SessionId | string;
+  types?: readonly CoreEventType[];
+  since?: number;
+  until?: number;
+  limit?: number;
+}
 
 export type EventListener<T> = (payload: T) => void;
 export type Unsubscribe = () => void;
 
 export interface EventBus {
-  emit<K extends keyof AgentEventMap>(event: K, payload: AgentEventMap[K]): void;
-  on<K extends keyof AgentEventMap>(
-    event: K,
-    listener: EventListener<AgentEventMap[K]>,
-  ): Unsubscribe;
-  once<K extends keyof AgentEventMap>(
-    event: K,
-    listener: EventListener<AgentEventMap[K]>,
-  ): Unsubscribe;
-  off<K extends keyof AgentEventMap>(event: K, listener: EventListener<AgentEventMap[K]>): void;
-  removeAllListeners(event?: keyof AgentEventMap): void;
+  emit<K extends CoreEventType>(event: K, envelope: EventEnvelope<K>): void;
+  on<K extends CoreEventType>(event: K, listener: EventListener<EventEnvelope<K>>): Unsubscribe;
+  onAny(listener: EventListener<EventEnvelope>): Unsubscribe;
+  once<K extends CoreEventType>(event: K, listener: EventListener<EventEnvelope<K>>): Unsubscribe;
+  off<K extends CoreEventType>(event: K, listener: EventListener<EventEnvelope<K>>): void;
+  removeAllListeners(event?: CoreEventType): void;
 }

@@ -31,4 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created typed repository classes for all domain entities with atomic transaction support.
   - Implemented test database reset utility (`resetTestDatabase`).
   - Added integration test suites for connections, migrations, and repositories (28 total workspace tests passing).
-- Updated documentation in `docs/database.md` and `docs/learning-notes.md`.
+- Implemented Evolve internal event system:
+  - Zod schemas for 11 core events: `user_prompt`, `assistant_response`, `tool_call`, `tool_result`, `command_execution`, `execution_result`, `human_feedback`, `solution_accepted`, `solution_rejected`, `session_started`, `session_completed`.
+  - Created `EventService` in `@evolve/db` providing validation, in-memory pub/sub, SQLite persistence, flexible filtering, and ordered session history retrieval.
+  - Added wildcard observer support (`subscribe`) and specific event subscriptions (`subscribeTo`).
+  - Added integration tests covering validation, ordering, filtering, and database persistence (36 total workspace tests passing).
+- Updated documentation in `docs/events.md` and `docs/database.md`.
