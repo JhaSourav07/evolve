@@ -81,6 +81,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented `EvolveMLPipeline` orchestrating the complete end-to-end lifecycle from raw SQLite interactions to adapter checkpoint export.
   - Added unit test suites covering filters, extraction, preprocessing, ChatML formatting, DPO pairs, evaluation, and pipeline execution (17 unit tests passing).
   - Authored comprehensive machine learning pipeline documentation (`docs/ml-pipeline.md`).
+- Implemented Evolve interaction integrations package (`@evolve/integrations`):
+  - Created `ConsentManager` enforcing strict explicit user opt-in before collecting terminal activity, editor actions, or external imports.
+  - Implemented workspace boundary confinement preventing capture outside authorized project directories.
+  - Implemented immutable `SourceAttribution` attaching source provenance, timestamps, consent scopes, and original platform IDs to every event.
+  - Implemented `NativeEventAdapter` emitting all 11 canonical Evolve event types for internal agent workflows.
+  - Implemented `TerminalAdapter` capturing terminal sessions, prompts, command executions, and execution results with exit codes and execution durations.
+  - Implemented `VSCodeAdapter` translating editor chat prompts, assistant responses, code actions (Quick Fix / Refactor), diff accept/reject feedback, and chat ratings into standard events.
+  - Implemented `PiAdapter` normalizing peer Pi agent interactive streams, tool invocations, and feedback values.
+  - Implemented `ClaudeImporter` parsing Claude.ai export archives (`conversations.json`), reconstructing chronological conversation trees, and extracting tool use/result pairs.
+  - Implemented `GeminiImporter` parsing Google AI Studio / Takeout JSON, normalizing `model` roles, multi-part messages, and `functionCall`/`functionResponse` blocks.
+  - Added unit and integration test suites covering all adapters, consent enforcement, out-of-boundary security rejections, and SQLite event persistence (18 tests passing).
+  - Authored interaction integrations architecture documentation (`docs/integrations.md`).
 - Updated database architecture documentation (`docs/database.md`).
 - Updated security architecture documentation (`docs/security.md`).
 - Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.

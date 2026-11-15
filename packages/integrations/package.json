@@ -1,0 +1,37 @@
+{
+  "name": "@evolve/integrations",
+  "version": "0.1.0",
+  "description": "Interaction integrations and event adapters for Evolve: Terminal, VS Code, Pi, Claude, and Gemini",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@evolve/core": "workspace:*",
+    "@evolve/db": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "integrations",
+    "vscode",
+    "terminal",
+    "adapters",
+    "claude",
+    "gemini"
+  ],
+  "author": "Sourav Jha",
+  "license": "MIT"
+}
