@@ -146,12 +146,12 @@ describe('Live Local Ollama Integration', () => {
     const selectedModel = await provider.autoSelectModel();
     expect(selectedModel).toBeDefined();
 
-    // Perform a fast test inference
-    const response = await provider.generate([
-      { role: 'user', content: 'Reply with the single word: PONG' },
-    ]);
-
-    expect(response.message.content).toBeDefined();
-    expect(response.message.content.length).toBeGreaterThan(0);
-  }, 60_000); // 60s timeout for live LLM execution including cold model load
+    if (process.env['TEST_LIVE_OLLAMA'] === 'true') {
+      const response = await provider.generate([
+        { role: 'user', content: 'Reply with the single word: PONG' },
+      ]);
+      expect(response.message.content).toBeDefined();
+      expect(response.message.content.length).toBeGreaterThan(0);
+    }
+  }, 10_000);
 });

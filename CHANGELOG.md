@@ -51,4 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added resilient error recovery for unknown tools, invalid parameters, and unhandled tool execution exceptions.
   - Implemented `createMinimalOllamaAgent` demonstrating end-to-end integration with local Ollama instances.
   - Added integration test suite verifying multi-step tasks, iteration limits, AbortSignal cancellation, error recovery, and SQLite event persistence (58 total workspace tests passing).
+- Implemented Evolve tool execution package (`@evolve/agent/tools`):
+  - Implemented 9 standard tools: `read_file`, `write_file`, `edit_file`, `list_files`, `search_code`, `run_command`, `run_tests`, `git_status`, and `git_diff`.
+  - Added multi-layered security controls with `assertSafePath`, canonical `realpath` validation, and symlink escape prevention.
+  - Implemented sensitive file protection blocking access to `.env*`, `.git/config`, SSH keys, private keys, certificates, and credentials.
+  - Implemented human-in-the-loop approval gating (`ToolApprovalHandler`) for destructive operations (`write_file`, `edit_file`, `run_command`, `run_tests`).
+  - Added process execution sandbox with timeouts (`timeoutMs`), stream buffer capping (50KB), closed stdin, and two-stage `SIGTERM` -> `SIGKILL` escalation.
+  - Implemented safe Git operations using direct `execFile` binary execution, `-C <workspaceRoot>` directory pinning, and `--` operand separators.
+  - Added unit and integration tests covering normal usage, path traversal, sensitive file blocks, approval rejection, timeouts, output truncation, and Git flag injection (82 total workspace tests passing).
+- Updated security architecture documentation (`docs/security.md`).
 - Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.

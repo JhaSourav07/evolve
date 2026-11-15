@@ -8,11 +8,20 @@ export interface ToolDefinition<TParams = unknown> {
   parameters: z.ZodType<TParams>;
 }
 
+export interface ToolApprovalRequest {
+  toolName: string;
+  description: string;
+  params: Record<string, unknown>;
+}
+
+export type ToolApprovalHandler = (request: ToolApprovalRequest) => Promise<boolean> | boolean;
+
 export interface ToolExecutionContext {
   sessionId: SessionId;
   workspaceRoot: string;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   logger: Logger;
+  requestApproval?: ToolApprovalHandler | undefined;
 }
 
 export interface ToolExecutionResult<TData = unknown> {

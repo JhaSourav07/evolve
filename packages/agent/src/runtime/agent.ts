@@ -278,6 +278,9 @@ export class AgentRuntime {
                 workspaceRoot: this.config.workspaceRoot,
                 ...(signal ? { signal } : {}),
                 logger: this.logger,
+                ...(this.config.requestApproval
+                  ? { requestApproval: this.config.requestApproval }
+                  : {}),
               });
               output = execResult.output;
               isSuccess = execResult.success;

@@ -5,6 +5,7 @@ import type {
   Logger,
   ModelProvider,
   SessionId,
+  ToolApprovalHandler,
 } from '@evolve/core';
 import type { ToolRegistry } from '../tools/registry.js';
 
@@ -14,6 +15,7 @@ export interface AgentRuntimeConfig {
   temperature?: number | undefined;
   systemPrompt?: string | undefined;
   maxContextTokens?: number | undefined;
+  requestApproval?: ToolApprovalHandler | undefined;
 }
 
 export interface EventPublisherLike {

@@ -3,8 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { OllamaProvider } from '../providers/ollama.js';
 import { AgentRuntime } from '../runtime/agent.js';
-import { readFileTool, writeFileTool } from '../tools/basic.js';
-import { ToolRegistry } from '../tools/registry.js';
+import { createDefaultToolRegistry } from '../tools/registry.js';
 
 /**
  * Creates and configures a minimal Evolve agent instance wired to a local Ollama server.
@@ -27,9 +26,7 @@ export async function createMinimalOllamaAgent(options?: {
     await provider.autoSelectModel();
   }
 
-  const tools = new ToolRegistry();
-  tools.register(readFileTool);
-  tools.register(writeFileTool);
+  const tools = createDefaultToolRegistry();
 
   const runtime = new AgentRuntime({
     provider,

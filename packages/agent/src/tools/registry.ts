@@ -1,5 +1,14 @@
 import type { AgentTool, ModelToolDefinition } from '@evolve/core';
 import { z } from 'zod';
+import { runCommandTool, runTestsTool } from './execution.js';
+import {
+  editFileTool,
+  listFilesTool,
+  readFileTool,
+  searchCodeTool,
+  writeFileTool,
+} from './filesystem.js';
+import { gitDiffTool, gitStatusTool } from './git.js';
 
 export class ToolRegistry {
   private readonly tools: Map<string, AgentTool<unknown, unknown>> = new Map();
@@ -21,6 +30,31 @@ export class ToolRegistry {
 
   public list(): AgentTool<unknown, unknown>[] {
     return Array.from(this.tools.values());
+  }
+
+  /**
+   * Registers all 9 standard Evolve tools into this registry.
+   */
+  public registerDefaultTools(): this {
+    const defaultTools: AgentTool<unknown, unknown>[] = [
+      readFileTool as AgentTool<unknown, unknown>,
+      writeFileTool as AgentTool<unknown, unknown>,
+      editFileTool as AgentTool<unknown, unknown>,
+      listFilesTool as AgentTool<unknown, unknown>,
+      searchCodeTool as AgentTool<unknown, unknown>,
+      runCommandTool as AgentTool<unknown, unknown>,
+      runTestsTool as AgentTool<unknown, unknown>,
+      gitStatusTool as AgentTool<unknown, unknown>,
+      gitDiffTool as AgentTool<unknown, unknown>,
+    ];
+
+    for (const tool of defaultTools) {
+      if (!this.has(tool.definition.name)) {
+        this.register(tool);
+      }
+    }
+
+    return this;
   }
 
   /**
@@ -66,4 +100,9 @@ export class ToolRegistry {
       };
     });
   }
+}
+
+export function createDefaultToolRegistry(): ToolRegistry {
+  const registry = new ToolRegistry();
+  return registry.registerDefaultTools();
 }
