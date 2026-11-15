@@ -56,4 +56,32 @@ I will read the configuration.
   it('returns empty array when no tool calls are present', () => {
     expect(parseOllamaToolCalls(undefined, 'Just normal text')).toEqual([]);
   });
+
+  it('normalizes string booleans and numbers into primitive types', () => {
+    const raw = [
+      {
+        id: 'call_normalize',
+        function: {
+          name: 'list_files',
+          arguments: {
+            path: '.',
+            recursive: 'true',
+            limit: '30',
+            maxDepth: '3',
+            otherFlag: 'false',
+          },
+        },
+      },
+    ];
+
+    const result = parseOllamaToolCalls(raw);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.arguments).toEqual({
+      path: '.',
+      recursive: true,
+      limit: 30,
+      maxDepth: 3,
+      otherFlag: false,
+    });
+  });
 });

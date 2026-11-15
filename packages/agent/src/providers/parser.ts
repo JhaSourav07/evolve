@@ -9,6 +9,29 @@ interface RawOllamaToolCall {
   };
 }
 
+function normalizeToolArguments(args: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === 'true') {
+        result[key] = true;
+      } else if (trimmed === 'false') {
+        result[key] = false;
+      } else if (/^-?\d+(\.\d+)?$/.test(trimmed) && !isNaN(Number(trimmed))) {
+        result[key] = Number(trimmed);
+      } else {
+        result[key] = value;
+      }
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = normalizeToolArguments(value as Record<string, unknown>);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 /**
  * Normalizes tool calls from Ollama API responses (both native and fallback formats).
  */
@@ -38,7 +61,7 @@ export function parseOllamaToolCalls(
       }
 
       const id = (call.id || `call_${randomUUID().slice(0, 8)}`) as ToolCallId;
-      result.push({ id, name, arguments: args });
+      result.push({ id, name, arguments: normalizeToolArguments(args) });
     }
 
     if (result.length > 0) {
@@ -53,10 +76,14 @@ export function parseOllamaToolCalls(
       try {
         const parsed = JSON.parse(jsonMatch[1]);
         if (parsed.name && (parsed.arguments || parsed.parameters)) {
+          const rawArguments = (parsed.arguments || parsed.parameters || {}) as Record<
+            string,
+            unknown
+          >;
           result.push({
             id: `call_${randomUUID().slice(0, 8)}` as ToolCallId,
             name: parsed.name,
-            arguments: parsed.arguments || parsed.parameters || {},
+            arguments: normalizeToolArguments(rawArguments),
           });
         }
       } catch {
