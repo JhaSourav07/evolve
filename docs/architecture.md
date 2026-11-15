@@ -71,7 +71,29 @@ graph TD
 
 ---
 
-## 4. The Cognitive Loop (Sense $\to$ Plan $\to$ Act $\to$ Observe $\to$ Reflect)
+## 4. Model Provider & Prompt Lifecycle
+
+The `@evolve/agent` package connects the cognitive agent loop to local inference engines via `ModelProvider`:
+
+```mermaid
+sequenceDiagram
+    participant Agent as Agent Loop
+    participant Provider as OllamaProvider
+    participant Ollama as Ollama Daemon (:11434)
+    participant Model as Qwen 2.5 / 3.5 Model Weights
+
+    Agent->>Provider: generate(messages, { tools })
+    Note over Provider: 1. Format messages (system/user/assistant/tool)<br/>2. Format tools into JSON schema specifications
+    Provider->>Ollama: POST /api/chat (JSON payload)
+    Note over Ollama,Model: 3. Tokenize input strings into token IDs<br/>4. Forward pass through neural network layers<br/>5. Generate next tokens autoregressively
+    Ollama-->>Provider: HTTP Response (message content / tool_calls / usage)
+    Note over Provider: 6. Parse native & fallback tool calls<br/>7. Calculate token usage & map finishReason
+    Provider-->>Agent: ModelResponse { message, usage, finishReason }
+```
+
+---
+
+## 5. The Cognitive Loop (Sense $\to$ Plan $\to$ Act $\to$ Observe $\to$ Reflect)
 
 1. **Sense**: Gather workspace state, directory layout, recent git diffs, and the user's objective.
 2. **Plan**: Formulate the next atomic action using the local model. If a plan requires multiple steps, output structured tool calls.

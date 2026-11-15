@@ -36,4 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created `EventService` in `@evolve/db` providing validation, in-memory pub/sub, SQLite persistence, flexible filtering, and ordered session history retrieval.
   - Added wildcard observer support (`subscribe`) and specific event subscriptions (`subscribeTo`).
   - Added integration tests covering validation, ordering, filtering, and database persistence (36 total workspace tests passing).
-- Updated documentation in `docs/events.md` and `docs/database.md`.
+- Implemented `@evolve/agent` package with Ollama model provider:
+  - Implemented `OllamaProvider` satisfying `@evolve/core` `ModelProvider` contract.
+  - Implemented model discovery (`/api/tags`), auto-selection of available coding models, and health checks (`/api/version`).
+  - Added non-streaming generation and real-time streaming via `AsyncIterable<ModelStreamChunk>` with NDJSON buffer handling.
+  - Added native Ollama and fallback JSON tool-call parsing with arguments normalization.
+  - Implemented `MockModelProvider` for offline, deterministic unit testing.
+  - Added comprehensive test suites with mocked network responses and live local Ollama verification (49 total workspace tests passing).
+- Updated architecture documentation with the complete prompt lifecycle trace.

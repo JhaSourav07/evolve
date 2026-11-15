@@ -36,6 +36,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  packages/agent:
+    dependencies:
+      '@evolve/core':
+        specifier: workspace:*
+        version: link:../core
+      '@evolve/db':
+        specifier: workspace:*
+        version: link:../db
+
   packages/core:
     dependencies:
       zod:
