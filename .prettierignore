@@ -4,3 +4,8 @@ coverage
 *.tsbuildinfo
 pnpm-lock.yaml
 .evolve
+.venv
+__pycache__
+.pytest_cache
+data
+models

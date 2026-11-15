@@ -17,6 +17,16 @@ build/
 # Testing & Coverage
 coverage/
 .vitest/
+.pytest_cache/
+
+# Python & ML
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+data/
+models/
 
 # Logs
 *.log

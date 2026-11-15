@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated SQLite FTS5 BM25 keyword retrieval with query sanitization and prefix stemming.
   - Integrated retrieved experiences into `AgentRuntime` and `ContextManager` system prompt construction.
   - Added unit and integration tests for feedback recording, training example generation, FTS5 retrieval, and agent memory injection (96 total workspace tests passing).
+- Implemented Evolve machine learning pipeline in Python (`@evolve/ml` / `packages/ml`):
+  - Created Python virtual environment and project toolchain with `uv`, `pydantic`, `datasets`, and `pytest`.
+  - Implemented `SQLiteInteractionExporter` extracting sessions, events, tool calls, and feedback from Evolve's SQLite persistence with technical correctness verification gating.
+  - Implemented `SecretFilter` redacting private RSA/SSH keys, OpenAI API keys, GitHub tokens, AWS keys, Hugging Face tokens, authorization headers, and database URIs.
+  - Implemented `DeduplicationFilter` calculating SHA-256 fingerprints over normalized interaction text.
+  - Implemented `DatasetPreprocessor` enforcing schema validation and disjoint train/validation splitting strictly partitioned by session ID to eliminate cross-session data leakage.
+  - Implemented `SFTDatasetGenerator` converting interactions into standard conversational ChatML datasets.
+  - Implemented `PreferenceDatasetGenerator` generating DPO contrastive pairwise triplets (`prompt`, `chosen`, `rejected`) from human corrections.
+  - Implemented `ModelEvaluator` and `SyntaxValidator` verifying Python AST syntax validity and establishing baseline benchmarks prior to fine-tuning.
+  - Implemented `SFTModelTrainer` supporting PEFT LoRA and 4-bit QLoRA (NF4 quantization) with AdamW and cosine scheduling.
+  - Implemented `EvolveMLPipeline` orchestrating the complete end-to-end lifecycle from raw SQLite interactions to adapter checkpoint export.
+  - Added unit test suites covering filters, extraction, preprocessing, ChatML formatting, DPO pairs, evaluation, and pipeline execution (17 unit tests passing).
+  - Authored comprehensive machine learning pipeline documentation (`docs/ml-pipeline.md`).
 - Updated database architecture documentation (`docs/database.md`).
 - Updated security architecture documentation (`docs/security.md`).
 - Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.

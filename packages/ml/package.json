@@ -1,0 +1,11 @@
+{
+  "name": "@evolve/ml",
+  "version": "0.1.0",
+  "description": "Python ML fine-tuning and evaluation pipeline for Evolve",
+  "private": true,
+  "scripts": {
+    "test": ".venv/bin/pytest tests",
+    "export": ".venv/bin/python -m evolve_ml.pipeline --export",
+    "preprocess": ".venv/bin/python -m evolve_ml.pipeline --preprocess"
+  }
+}

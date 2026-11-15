@@ -1,0 +1,29 @@
+[project]
+name = "evolve-ml"
+version = "0.1.0"
+description = "Machine learning pipeline for Evolve coding agent: SFT, LoRA/QLoRA, DPO and evaluation"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Sourav Jha" }]
+dependencies = [
+    "datasets>=2.14.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "peft>=0.7.0",
+    "trl>=0.7.0",
+    "bitsandbytes>=0.41.0",
+]
+test = [
+    "pytest>=7.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
