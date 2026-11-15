@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { Command } from 'commander';
 import {
   createSessionId,
   EvolveConfigSchema,
@@ -8,6 +9,15 @@ import {
   type EvolveConfig,
   type SessionId,
 } from '@evolve/core';
+import { runChatCommand } from './commands/chat.js';
+import { runConfigCommand } from './commands/config.js';
+import { runFeedbackCommand } from './commands/feedback.js';
+import { runHistoryCommand } from './commands/history.js';
+import { runInitCommand } from './commands/init.js';
+import { runIntegrationsCommand } from './commands/integrations.js';
+import { runMemoryCommand } from './commands/memory.js';
+import { runModelsCommand } from './commands/models.js';
+import { runStatusCommand } from './commands/status.js';
 
 export function formatCliBanner(): string {
   const info = getEvolveInfo();
@@ -30,10 +40,106 @@ export function initCliSession(rootDir: string): CliSession {
   return { sessionId, config, events };
 }
 
-export function runCli(): void {
-  console.log(formatCliBanner());
+export function buildCli(): Command {
+  const info = getEvolveInfo();
+  const program = new Command();
+
+  program
+    .name('evolve')
+    .description('Autonomous, local-first AI software engineering agent')
+    .version(info.version);
+
+  // Default action: Launch interactive mode
+  program.action(async () => {
+    await runChatCommand();
+  });
+
+  program
+    .command('chat [prompt]')
+    .description('Start interactive conversation or execute a single task prompt')
+    .action(async (prompt?: string) => {
+      await runChatCommand(prompt);
+    });
+
+  program
+    .command('init')
+    .description('Initialize Evolve in the current repository')
+    .option('-r, --root <dir>', 'Project root directory')
+    .action(async (opts: { root?: string }) => {
+      await runInitCommand({ rootDir: opts.root });
+    });
+
+  program
+    .command('status')
+    .description('Display project, model, and system status')
+    .action(async () => {
+      await runStatusCommand();
+    });
+
+  program
+    .command('history')
+    .description('List previous agent sessions in this project')
+    .action(async () => {
+      await runHistoryCommand();
+    });
+
+  program
+    .command('memory')
+    .description('Inspect or record project memories and conventions')
+    .option('-a, --add', 'Add a memory entry')
+    .option(
+      '-c, --category <category>',
+      'Memory category: user_preference | project_rule | experience',
+    )
+    .option('-k, --key <key>', 'Memory key')
+    .option('--content <content>', 'Memory content')
+    .action(async (opts: { add?: boolean; category?: string; key?: string; content?: string }) => {
+      await runMemoryCommand(opts);
+    });
+
+  program
+    .command('integrations')
+    .description('View and manage interaction integrations and consent')
+    .option('-i, --import <file>', 'Import conversation export JSON (Claude or Gemini)')
+    .action(async (opts: { import?: string }) => {
+      await runIntegrationsCommand({ importFile: opts.import });
+    });
+
+  program
+    .command('feedback')
+    .description('Review feedback history or submit rating on previous response')
+    .option('-r, --rating <rating>', 'Rating: 1 (correct), 0 (partial), -1 (incorrect)')
+    .option('-n, --notes <notes>', 'Feedback notes or explanation')
+    .option('--correction <correction>', 'Written code correction')
+    .action(async (opts: { rating?: string; notes?: string; correction?: string }) => {
+      await runFeedbackCommand(opts);
+    });
+
+  program
+    .command('config')
+    .description('Display active configuration settings')
+    .action(async () => {
+      await runConfigCommand();
+    });
+
+  program
+    .command('models')
+    .description('Discover available local Ollama models')
+    .action(async () => {
+      await runModelsCommand();
+    });
+
+  return program;
+}
+
+export async function runCli(): Promise<void> {
+  const program = buildCli();
+  await program.parseAsync(process.argv);
 }
 
 if (process.argv[1] && process.argv[1].endsWith('index.js')) {
-  runCli();
+  runCli().catch((err) => {
+    console.error('Fatal CLI Error:', err);
+    process.exit(1);
+  });
 }

@@ -62,12 +62,14 @@ graph TD
 
 ## 3. Package Responsibilities
 
-| Package         | Location         | Responsibility                                                                                     | Dependencies                                 |
-| :-------------- | :--------------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------- |
-| `@evolve/core`  | `packages/core`  | Pure domain types, events, error definitions, and result monads.                                   | Zero runtime dependencies                    |
-| `@evolve/db`    | `packages/db`    | Database connection, schema migrations, query layer, and repository implementations.               | `@evolve/core`, `better-sqlite3` or `kysely` |
-| `@evolve/agent` | `packages/agent` | ReAct cognitive loop, Ollama API client, tool definitions, execution sandbox, and reflexion logic. | `@evolve/core`, `@evolve/db`                 |
-| `@evolve/cli`   | `apps/cli`       | Command-line parser, terminal UI, real-time event streaming, and approval prompts.                 | `@evolve/core`, `@evolve/agent`              |
+| Package                | Location                | Responsibility                                                                                     | Dependencies                                  |
+| :--------------------- | :---------------------- | :------------------------------------------------------------------------------------------------- | :-------------------------------------------- |
+| `@evolve/core`         | `packages/core`         | Pure domain types, events, error definitions, and result monads.                                   | Zero runtime dependencies                     |
+| `@evolve/db`           | `packages/db`           | Database connection, schema migrations, query layer, and repository implementations.               | `@evolve/core`, `better-sqlite3`, `drizzle`   |
+| `@evolve/agent`        | `packages/agent`        | ReAct cognitive loop, Ollama API client, tool definitions, execution sandbox, and reflexion logic. | `@evolve/core`, `@evolve/db`                  |
+| `@evolve/integrations` | `packages/integrations` | External adapters (Terminal, VS Code, Pi) and importers (Claude, Gemini) with consent controls.    | `@evolve/core`, `@evolve/db`                  |
+| `@evolve/ml`           | `packages/ml`           | Python pipeline for SFT (LoRA/QLoRA), DPO preference datasets, and AST evaluation.                 | `transformers`, `peft`, `datasets`, `pytest`  |
+| `@evolve/cli`          | `apps/cli`              | Modern terminal UI (Ink & React), interactive chat, approvals, streaming, and command suite.       | `@evolve/core`, `@evolve/agent`, `@evolve/db` |
 
 ---
 
@@ -158,3 +160,67 @@ flowchart TD
 4. **`ToolRegistry`**:
    - Central catalog for registering executable `AgentTool` implementations.
    - Automatically converts Zod parameter schemas into JSON Schema specifications consumed by LLMs.
+
+---
+
+## 7. Terminal User Interface Architecture (`@evolve/cli`)
+
+The CLI provides a modern, minimalist terminal user interface built with **Ink** and **React**:
+
+```mermaid
+flowchart TD
+    subgraph CLI ["apps/cli"]
+        Commander["Commander Parser (CLI Args & Flags)"]
+        Context["CliContext (Services, DB, Agent Wiring)"]
+        InkApp["InteractiveApp (React / Ink Screen Orchestrator)"]
+
+        subgraph Components ["Reusable Ink Components"]
+            Header["Header (Model, Project, Git Branch)"]
+            MsgList["MessageList & MessageItem"]
+            Input["InputBox (Multiline, History, Spinner)"]
+            ApprovalModal["ToolApprovalPrompt (y/N Gating)"]
+            FeedbackModal["FeedbackPrompt (+1/0/-1 Ratings)"]
+            StaticViews["StatusCard / History / Memory / Integrations / Models"]
+        end
+    end
+
+    subgraph CoreAgent ["Cognitive & Persistence Core"]
+        Runtime["AgentRuntime (Cognitive Loop)"]
+        EventStream["Typed Event Bus / Stream"]
+        ApprovalHandler["ToolApprovalHandler (Promise Resolver)"]
+        DB["SQLite & Repository Services"]
+    end
+
+    Commander --> Context
+    Context --> Runtime
+    Context --> DB
+    Commander --> InkApp
+    InkApp --> Components
+
+    Input -- "Submit Prompt" --> Runtime
+    Runtime -- "Lifecycle Events" --> EventStream
+    EventStream -- "Update State" --> MsgList
+    Runtime -- "Request Approval" --> ApprovalHandler
+    ApprovalHandler -- "Show Gate" --> ApprovalModal
+    ApprovalModal -- "User Decision (y/N)" --> ApprovalHandler
+    FeedbackModal -- "Submit Rating" --> DB
+```
+
+### 7.1 Key Terminal Architecture Principles
+
+1. **Ink Reconciler & Layout Engine**:
+   - Ink implements a custom React reconciler targeting standard output.
+   - Layout is computed via Meta's **Yoga** Flexbox engine, allowing responsive terminal reflow across terminal column and row changes.
+   - Updates are rendered using minimal ANSI escape sequences (cursor repositioning and differential line overwrites) to prevent full-terminal flicker.
+
+2. **Decoupled Event Streaming**:
+   - `InteractiveApp` never polls. It registers an observer on `AgentRuntime.onAny(event)` and updates React state reactively.
+   - Streaming assistant response chunks, tool invocations, and tool results are mapped into immutable `DisplayMessage` items.
+
+3. **Asynchronous Approval Gating**:
+   - Destructive operations (`write_file`, `edit_file`, `run_command`, `run_tests`) trigger a `ToolApprovalHandler`.
+   - The handler stores a pending Promise resolution callback and transitions React state to show `ToolApprovalPrompt`.
+   - The user inputs `y`, `n`, or `c`, which immediately resolves the Promise and resumes or halts the runtime loop safely.
+
+4. **Session Context Management**:
+   - `CliContext` creates or resumes project sessions, initializes SQLite connections in WAL mode, configures local Ollama model providers, and retrieves relevant FTS5 memories into the agent's system prompt prior to invocation.

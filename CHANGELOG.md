@@ -96,3 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated database architecture documentation (`docs/database.md`).
 - Updated security architecture documentation (`docs/security.md`).
 - Updated architecture documentation with the complete prompt lifecycle trace and runtime execution loop specifications.
+- Implemented modern terminal user interface (`@evolve/cli`) with Ink and React:
+  - Implemented 10 unified CLI commands via Commander: `evolve`, `evolve chat [prompt]`, `evolve init`, `evolve status`, `evolve history`, `evolve memory`, `evolve integrations`, `evolve feedback`, `evolve config`, and `evolve models`.
+  - Built interactive chat screen with multiline input (`\`), command history navigation (Up/Down arrows), real-time streaming tokens, and live thinking indicators.
+  - Implemented human-in-the-loop tool approval gating (`ToolApprovalPrompt`) for destructive filesystem and shell execution actions.
+  - Implemented modal feedback interface (`FeedbackPrompt`) allowing +1 / 0 / -1 ratings and written corrections connected directly to `FeedbackService`.
+  - Implemented static dashboard components: `StatusCard`, `HistoryList`, `MemoryList`, `IntegrationsList`, and `ModelsList` with minimalist charcoal styling.
+  - Integrated `CliContext` managing SQLite DB, sessions, memories, event streaming, consent, and Ollama agent runtime.
+  - Handled asynchronous cancellation via `AbortController` on Ctrl+C and slash commands (`/clear`, `/exit`, `/feedback`, `/help`, `/status`).
+  - Added unit and integration tests for commands, context initialization, memory injection, and CLI options (122 total workspace tests passing).
+  - Authored comprehensive terminal UI and CLI reference documentation (`docs/cli.md`).

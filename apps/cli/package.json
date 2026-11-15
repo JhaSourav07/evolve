@@ -12,7 +12,13 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@evolve/core": "workspace:*"
+    "@evolve/agent": "workspace:*",
+    "@evolve/core": "workspace:*",
+    "@evolve/db": "workspace:*",
+    "@evolve/integrations": "workspace:*",
+    "commander": "^15.1.0",
+    "ink": "^8.0.0",
+    "react": "^19.3.1"
   },
   "keywords": [
     "ai",
@@ -20,5 +26,8 @@
     "cli"
   ],
   "author": "Sourav Jha",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.3.0"
+  }
 }
