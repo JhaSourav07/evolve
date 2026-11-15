@@ -5,7 +5,7 @@ import { SessionRepository } from './repositories/session.js';
 
 describe('Database Connection & Pragma Enforcement', () => {
   it('enforces foreign key constraints', () => {
-    const { db, _sqlite, close } = initDatabase({ path: ':memory:' });
+    const { db, close } = initDatabase({ path: ':memory:' });
 
     try {
       const sessionRepo = new SessionRepository(db);
