@@ -55,6 +55,9 @@ export function initDatabase(options: DatabaseConnectionOptions = {}): EvolveDat
  */
 export function resetTestDatabase(sqlite: Database.Database): void {
   const tables = [
+    'repo_dependencies',
+    'repo_symbols',
+    'repo_files',
     'feedback',
     'tool_calls',
     'events',
@@ -74,6 +77,11 @@ export function resetTestDatabase(sqlite: Database.Database): void {
       sqlite.exec('DELETE FROM memory_fts;');
     } catch {
       // ignore if memory_fts does not exist yet
+    }
+    try {
+      sqlite.exec('DELETE FROM repo_code_fts;');
+    } catch {
+      // ignore if repo_code_fts does not exist yet
     }
     sqlite.pragma('foreign_keys = ON');
   });

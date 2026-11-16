@@ -20,9 +20,13 @@
   "dependencies": {
     "@evolve/core": "workspace:*",
     "@evolve/db": "workspace:*",
+    "better-sqlite3": "^13.2.0",
     "ignore": "^7.0.14",
     "typescript": "~5.8.2",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
   },
   "keywords": [
     "ai",
