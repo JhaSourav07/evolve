@@ -77,7 +77,11 @@ Within the chat input box, type slash commands for quick navigation:
 
 When Evolve requests tools, execution details are rendered with clear indicators:
 
-- Reading a file (`read_file`): Displays file path and read byte count.
+- Inspecting project (`inspect_project` / `get_project_structure`): Displays frameworks, detected languages, manifests, and key directories.
+- Symbol search (`find_symbol`): Displays declarations with line spans and signatures.
+- References (`find_references`): Displays call sites and imports across the repository.
+- Dependencies (`get_dependencies` / `get_related_files`): Displays external/internal dependencies and reverse importers.
+- Reading a file (`read_file`): Displays file path, line numbers, and read byte count.
 - Editing a file (`edit_file`): Displays target file and applied replacements.
 - Running commands (`run_command`): Displays command string, working directory, and execution duration.
 - Testing (`run_tests`): Displays detected test runner and pass/fail summary.

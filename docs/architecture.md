@@ -66,10 +66,11 @@ graph TD
 | :--------------------- | :---------------------- | :------------------------------------------------------------------------------------------------- | :-------------------------------------------- |
 | `@evolve/core`         | `packages/core`         | Pure domain types, events, error definitions, and result monads.                                   | Zero runtime dependencies                     |
 | `@evolve/db`           | `packages/db`           | Database connection, schema migrations, query layer, and repository implementations.               | `@evolve/core`, `better-sqlite3`, `drizzle`   |
-| `@evolve/agent`        | `packages/agent`        | ReAct cognitive loop, Ollama API client, tool definitions, execution sandbox, and reflexion logic. | `@evolve/core`, `@evolve/db`                  |
+| `@evolve/indexer`      | `packages/indexer`      | Repository discovery, AST symbol extraction, incremental file indexing, and context retrieval.    | `@evolve/core`, `@evolve/db`, `typescript`    |
+| `@evolve/agent`        | `packages/agent`        | ReAct cognitive loop, Ollama API client, 15 sandboxed tools, and reflexion logic.                  | `@evolve/core`, `@evolve/db`, `@evolve/indexer`|
 | `@evolve/integrations` | `packages/integrations` | External adapters (Terminal, VS Code, Pi) and importers (Claude, Gemini) with consent controls.    | `@evolve/core`, `@evolve/db`                  |
 | `@evolve/ml`           | `packages/ml`           | Python pipeline for SFT (LoRA/QLoRA), DPO preference datasets, and AST evaluation.                 | `transformers`, `peft`, `datasets`, `pytest`  |
-| `@evolve/cli`          | `apps/cli`              | Modern terminal UI (Ink & React), interactive chat, approvals, streaming, and command suite.       | `@evolve/core`, `@evolve/agent`, `@evolve/db` |
+| `@evolve/cli`          | `apps/cli`              | Modern terminal UI (Ink & React), interactive chat, approvals, streaming, and command suite.       | `@evolve/core`, `@evolve/agent`, `@evolve/db`, `@evolve/indexer` |
 
 ---
 

@@ -162,7 +162,8 @@ evolve/
 ├── packages/
 │   ├── core/            # Domain models, schema validation (Zod), and typed event bus
 │   ├── db/              # SQLite persistence with Drizzle ORM, WAL mode, migrations, and FTS5
-│   ├── agent/           # Cognitive loop, Ollama provider, 9 sandboxed tools, and Reflexion
+│   ├── indexer/         # Repository discovery, AST symbol extraction, incremental indexing & FTS5
+│   ├── agent/           # Cognitive loop, Ollama provider, 15 sandboxed tools, and Reflexion
 │   ├── integrations/    # Event adapters (Terminal, VS Code, Pi) and importers (Claude, Gemini)
 │   └── ml/              # Python dataset preparation, secret scrubbing, and SFT/DPO pipelines
 ├── docs/                # Comprehensive architectural and operational documentation
@@ -275,17 +276,26 @@ Type these slash commands directly inside the chat prompt:
 
 ## Tool Suite & Security Sandboxing
 
-Evolve equips local LLMs with 9 native execution tools:
+Evolve equips local LLMs with 15 native execution and repository intelligence tools:
 
-1. **`read_file`**: Read file contents with optional line-range slicing.
-2. **`write_file`**: Create new files or overwrite existing files. _(Requires user approval)_
-3. **`edit_file`**: Perform targeted, atomic string replacements with exact character matching. _(Requires user approval)_
-4. **`list_files`**: Browse directory hierarchies with recursive depth limits and glob filtering.
-5. **`search_code`**: Fast text search across files with regex and file-pattern scoping.
-6. **`run_command`**: Execute bash/shell commands within the workspace with strict timeouts. _(Requires user approval)_
-7. **`run_tests`**: Execute testing frameworks (Vitest, Jest, Pytest) and parse structured pass/fail results. _(Requires user approval)_
-8. **`retrieve_memory`**: Semantic and keyword lookup against past session experiences and project rules.
-9. **`store_memory`**: Persist new architectural conventions or debugging solutions for future retrieval.
+### Repository Intelligence Tools
+1. **`inspect_project`**: Profile project root, detect frameworks, languages, package managers, and directories.
+2. **`get_project_structure`**: High-level repository structure, key config files, and documentation.
+3. **`find_symbol`**: Locate declarations of functions, classes, interfaces, or types with line numbers and signatures.
+4. **`find_references`**: Locate all call sites, usages, and import statements of a symbol across files.
+5. **`get_dependencies`**: Inspect imported external libraries, internal workspace modules, and reverse importers.
+6. **`get_related_files`**: Trace related files connected by import/export relationships and module boundaries.
+
+### Filesystem & Execution Tools
+7. **`read_file`**: Read file contents with optional line-range slicing (`startLine`, `endLine`).
+8. **`list_files`**: Browse directory hierarchies respecting `.gitignore` and exclusion policies.
+9. **`search_code`**: Fast text search across files accelerated by SQLite FTS5 index.
+10. **`write_file`**: Create new files or overwrite existing files. _(Requires user approval)_
+11. **`edit_file`**: Perform targeted, atomic string replacements with exact character matching. _(Requires user approval)_
+12. **`run_command`**: Execute bash/shell commands within the workspace with strict timeouts. _(Requires user approval)_
+13. **`run_tests`**: Execute testing frameworks (Vitest, Jest, Pytest) and parse structured pass/fail results. _(Requires user approval)_
+14. **`git_status`**: Inspect working tree branch, modified files, and staged changes.
+15. **`git_diff`**: View unified diffs across working copy or staged index.
 
 ### Security Guarantees
 
@@ -371,6 +381,7 @@ pnpm --filter @evolve/ml test
 Explore the comprehensive guides in the [`docs/`](./docs) directory:
 
 - [CLI Reference & TUI Guide](./docs/cli.md) — Comprehensive command reference, keyboard shortcuts, and Ink architecture.
+- [Repository Intelligence Architecture](./docs/repository-intelligence.md) — Multi-ecosystem scanner, AST parsing, incremental FTS5 indexing, and context retrieval.
 - [Architecture Overview](./docs/architecture.md) — System boundaries, ReAct loop mechanics, and event bus lifecycle.
 - [Database Schema & Migrations](./docs/database.md) — SQLite schema design, Drizzle ORM configuration, and FTS5 indexing.
 - [Event Bus & Lifecycle](./docs/events.md) — Typed event envelopes, persistence, and audit logging.
