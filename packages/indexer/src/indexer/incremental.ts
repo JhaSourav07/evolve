@@ -53,6 +53,30 @@ export class RepositoryIndexer {
 
     const filter = createExclusionFilter(resolvedRoot);
 
+    // Ensure project exists in projects table to satisfy foreign key constraints
+    let effectiveProjectId = projectId;
+    try {
+      const existingProj = this.sqlite
+        .prepare('SELECT id FROM projects WHERE id = ?')
+        .get(projectId) as { id: string } | undefined;
+      if (!existingProj) {
+        const byPath = this.sqlite
+          .prepare('SELECT id FROM projects WHERE path = ?')
+          .get(resolvedRoot) as { id: string } | undefined;
+        if (byPath) {
+          effectiveProjectId = byPath.id;
+        } else {
+          this.sqlite
+            .prepare(
+              'INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+            )
+            .run(projectId, path.basename(resolvedRoot), resolvedRoot, Date.now(), Date.now());
+        }
+      }
+    } catch {
+      // Table may not exist in non-standard test setups
+    }
+
     let addedFiles = 0;
     let modifiedFiles = 0;
     let unchangedFiles = 0;
@@ -100,7 +124,7 @@ export class RepositoryIndexer {
     // Collect all paths currently known in DB for this project
     const existingDbFiles = this.sqlite
       .prepare('SELECT id, path FROM repo_files WHERE project_id = ?')
-      .all(projectId) as Array<{ id: string; path: string }>;
+      .all(effectiveProjectId) as Array<{ id: string; path: string }>;
     const seenPaths = new Set<string>();
 
     // Walk disk
@@ -153,7 +177,7 @@ export class RepositoryIndexer {
           }
 
           const mtimeMs = Math.floor(stat.mtimeMs);
-          const existing = selectFileStmt.get(projectId, relPath) as ExistingFileRow | undefined;
+          const existing = selectFileStmt.get(effectiveProjectId, relPath) as ExistingFileRow | undefined;
 
           // FAST PATH: If file size & mtime match, skip read/hashing entirely
           if (
@@ -183,7 +207,7 @@ export class RepositoryIndexer {
             continue;
           }
 
-          const fileId = `file_${crypto.createHash('sha1').update(`${projectId}:${relPath}`).digest('hex').slice(0, 16)}`;
+          const fileId = `file_${crypto.createHash('sha1').update(`${effectiveProjectId}:${relPath}`).digest('hex').slice(0, 16)}`;
           const isAdded = !existing;
           const language = detectLanguageByExtension(relPath);
           const isTest = relPath.includes('.test.') || relPath.includes('.spec.') || relPath.startsWith('tests/') || relPath.startsWith('test/') ? 1 : 0;
@@ -200,13 +224,13 @@ export class RepositoryIndexer {
           if (!isAdded) {
             deleteSymbolsStmt.run(fileId);
             deleteDepsStmt.run(fileId);
-            deleteFtsStmt.run(projectId, relPath);
+            deleteFtsStmt.run(effectiveProjectId, relPath);
           }
 
           // 1. Insert/Update repo_files
           insertFileStmt.run(
             fileId,
-            projectId,
+            effectiveProjectId,
             relPath,
             contentHash,
             mtimeMs,
@@ -217,15 +241,15 @@ export class RepositoryIndexer {
           );
 
           // 2. Insert into FTS5
-          deleteFtsStmt.run(projectId, relPath);
-          insertFtsStmt.run(relPath, projectId, content);
+          deleteFtsStmt.run(effectiveProjectId, relPath);
+          insertFtsStmt.run(relPath, effectiveProjectId, content);
 
           // 3. Insert symbols
           for (const sym of parsed.symbols) {
             const symId = `sym_${crypto.randomUUID().slice(0, 12)}`;
             insertSymbolStmt.run(
               symId,
-              projectId,
+              effectiveProjectId,
               fileId,
               sym.name,
               sym.kind,
@@ -242,7 +266,7 @@ export class RepositoryIndexer {
             const depId = `dep_${crypto.randomUUID().slice(0, 12)}`;
             insertDepStmt.run(
               depId,
-              projectId,
+              effectiveProjectId,
               fileId,
               dep.targetModule,
               JSON.stringify(dep.importedSymbols),
@@ -268,7 +292,7 @@ export class RepositoryIndexer {
           deleteSymbolsStmt.run(oldFile.id);
           deleteDepsStmt.run(oldFile.id);
           deleteFileStmt.run(oldFile.id);
-          deleteFtsStmt.run(projectId, oldFile.path);
+          deleteFtsStmt.run(effectiveProjectId, oldFile.path);
           deletedFiles++;
         }
       }
@@ -277,7 +301,7 @@ export class RepositoryIndexer {
     deleteTransaction();
 
     return {
-      projectId,
+      projectId: effectiveProjectId,
       totalFiles: diskFiles.length,
       addedFiles,
       modifiedFiles,
