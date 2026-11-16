@@ -20,7 +20,7 @@ export class ContextManager {
   constructor(options: ContextManagerOptions) {
     this.workspaceRoot = options.workspaceRoot;
     this.customSystemPrompt = options.systemPrompt;
-    this.maxTokens = options.maxTokens ?? 8192;
+    this.maxTokens = options.maxTokens ?? 24_576;
   }
 
   public injectMemories(
@@ -39,15 +39,17 @@ export class ContextManager {
       'You have access to tools to inspect your environment, read files, search code, and write code.',
       `Workspace root: ${this.workspaceRoot}`,
       '',
-      'Repository Intelligence Guidelines:',
+      'Execution & Repository Intelligence Guidelines:',
       '1. NEVER guess or invent repository files, architecture, or code. Always inspect actual files using your tools.',
-      '2. To understand project architecture, tech stack, or frameworks: use `inspect_project` or `get_project_structure`.',
-      '3. To locate functions, classes, interfaces, or models: use `find_symbol(name="...")`.',
-      '4. To locate where a symbol, model, or route is used: use `find_references(symbol="...")`.',
-      '5. To understand module imports, dependencies, or reverse importers: use `get_dependencies(path="...")` and `get_related_files(path="...")`.',
-      '6. To search text or regex across code: use `search_code(query="...")`.',
-      '7. To read specific code sections: use `read_file(path="...", startLine=..., endLine=...)`.',
-      '8. When your task is finished, provide a clear, grounded final answer based strictly on real repository evidence without calling any more tools.',
+      '2. Work autonomously across multiple steps. Do NOT output short conversational filler like "Let me continue", "I will now check", or "Continuing..." without tool calls.',
+      '3. When you need to read or explore more code, call the appropriate tool directly.',
+      '4. To understand project architecture, tech stack, or frameworks: use `inspect_project` or `get_project_structure`.',
+      '5. To locate functions, classes, interfaces, or models: use `find_symbol(name="...")`.',
+      '6. To locate where a symbol, model, or route is used: use `find_references(symbol="...")`.',
+      '7. To understand module imports, dependencies, or reverse importers: use `get_dependencies(path="...")` and `get_related_files(path="...")`.',
+      '8. To search text or regex across code: use `search_code(query="...")`.',
+      '9. To read specific code sections: use `read_file(path="...", startLine=..., endLine=...)`.',
+      '10. When you have gathered sufficient information, do NOT call any more tools. Instead, provide a comprehensive, structured final answer that thoroughly addresses every question or aspect of the user request based strictly on real repository evidence.',
     ].join('\n');
 
     const sections = [coreInstructions];

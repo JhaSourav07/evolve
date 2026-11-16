@@ -8,6 +8,7 @@ describe('Configuration Schemas', () => {
     expect(config.model).toBe('qwen2.5-coder:7b');
     expect(config.baseUrl).toBe('http://localhost:11434');
     expect(config.temperature).toBe(0.2);
+    expect(config.contextWindow).toBe(32_768);
     expect(config.timeoutMs).toBe(60_000);
   });
 

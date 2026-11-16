@@ -9,7 +9,7 @@ import {
   type ModelStreamChunk,
   type ModelToolDefinition,
 } from '@evolve/core';
-import { parseOllamaToolCalls } from './parser.js';
+import { cleanToolCallMarkup, parseOllamaToolCalls } from './parser.js';
 import type { OllamaHealthResult, OllamaModelInfo, OllamaProviderConfig } from './types.js';
 
 interface RawOllamaResponse {
@@ -38,12 +38,14 @@ export class OllamaProvider implements ModelProvider {
   private readonly baseUrl: string;
   private currentModel: string;
   private readonly defaultTemperature: number;
+  private readonly contextWindow: number;
   private readonly timeoutMs: number;
 
   constructor(config: OllamaProviderConfig = {}) {
     this.baseUrl = (config.baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
     this.currentModel = config.model || 'qwen3.5:9b';
     this.defaultTemperature = config.defaultTemperature ?? 0.2;
+    this.contextWindow = config.contextWindow ?? 32_768;
     this.timeoutMs = config.timeoutMs ?? 60_000;
   }
 
@@ -187,12 +189,18 @@ export class OllamaProvider implements ModelProvider {
       }
     }
 
-    if (!content && thinking) {
-      content = thinking;
-    }
-
     const rawToolCalls = raw.message?.tool_calls;
     const toolCalls = parseOllamaToolCalls(rawToolCalls, content);
+
+    // If fallback tool calls were parsed from content text, clean tool markup from content
+    if (toolCalls.length > 0 && (!rawToolCalls || rawToolCalls.length === 0)) {
+      content = cleanToolCallMarkup(content);
+    }
+
+    // Only fallback content to thinking if there are no tool calls and content is empty
+    if (!content && thinking && toolCalls.length === 0) {
+      content = thinking;
+    }
 
     const finishReason =
       raw.done_reason === 'stop' ? (toolCalls.length > 0 ? 'tool_calls' : 'stop') : 'stop';
@@ -319,6 +327,7 @@ export class OllamaProvider implements ModelProvider {
       stream,
       options: {
         temperature: options?.temperature ?? this.defaultTemperature,
+        num_ctx: this.contextWindow,
         ...(options?.maxTokens ? { num_predict: options.maxTokens } : {}),
       },
     };

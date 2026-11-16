@@ -6,6 +6,7 @@ export const ModelConfigSchema = z.object({
   baseUrl: z.string().url().default('http://localhost:11434'),
   temperature: z.number().min(0).max(2).default(0.2),
   maxTokens: z.number().int().positive().optional(),
+  contextWindow: z.number().int().positive().default(32_768),
   timeoutMs: z.number().int().positive().default(60_000),
 });
 

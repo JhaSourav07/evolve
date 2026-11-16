@@ -95,6 +95,7 @@ export class CliContext {
     this.provider = new OllamaProvider({
       model: initialModel,
       baseUrl: this.config.model.baseUrl,
+      contextWindow: this.config.model.contextWindow ?? 32_768,
       timeoutMs: 120_000,
     });
   }
@@ -164,6 +165,9 @@ export class CliContext {
       config: {
         workspaceRoot: this.rootDir,
         maxSteps: this.config.maxStepsPerSession,
+        maxContextTokens: this.config.model.contextWindow
+          ? Math.floor(this.config.model.contextWindow * 0.75)
+          : 24_576,
         temperature: this.config.model.temperature,
         systemPrompt,
         requestApproval: approvalHandler,

@@ -20,5 +20,6 @@ export interface OllamaProviderConfig {
   baseUrl?: string | undefined;
   model?: string | undefined;
   defaultTemperature?: number | undefined;
+  contextWindow?: number | undefined;
   timeoutMs?: number | undefined;
 }

@@ -25,6 +25,21 @@ import type {
   AgentRunResult,
 } from './types.js';
 
+function isIncompleteContinuation(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return true;
+  if (trimmed.length > 150) return false;
+  const lower = trimmed.toLowerCase();
+  const continuationPatterns = [
+    /^(?:let me|i will|i'll|now i will|now let me|continuing|proceeding|let's|allow me to)\s+(?:continue|proceed|check|inspect|look|explore|investigate|search|read|find|examine)\b/i,
+    /^(?:continue|continuing|proceed|proceeding)\b/i,
+    /^let me\s+[a-z]+/i,
+    /^i'll\s+[a-z]+/i,
+    /^i will\s+[a-z]+/i,
+  ];
+  return continuationPatterns.some((pattern) => pattern.test(lower));
+}
+
 /**
  * Autonomous Agent Runtime.
  * Manages the iterative think-act-observe agent loop, context management,
@@ -124,6 +139,8 @@ export class AgentRuntime {
     const signal = options?.signal;
     const maxSteps = this.config.maxSteps ?? 20;
     let step = 0;
+    let consecutiveIncompleteNudges = 0;
+    const maxIncompleteNudges = 3;
 
     this.logger.info(`Starting agent session ${sessionId}`, { sessionId, prompt });
 
@@ -236,9 +253,27 @@ export class AgentRuntime {
         finishReason: response.finishReason,
       });
 
-      // If no tool calls were requested, the agent has determined the task is complete!
+      // If no tool calls were requested, check if it's an incomplete continuation filler
       const toolCalls = assistantMessage.toolCalls;
       if (!toolCalls || toolCalls.length === 0) {
+        if (
+          isIncompleteContinuation(assistantMessage.content) &&
+          consecutiveIncompleteNudges < maxIncompleteNudges &&
+          step < maxSteps
+        ) {
+          consecutiveIncompleteNudges++;
+          this.logger.warn(
+            `Detected incomplete continuation at step ${step}: "${assistantMessage.content}". Nudging model to proceed.`,
+            { sessionId, content: assistantMessage.content, nudgeCount: consecutiveIncompleteNudges },
+          );
+          this.conversation.addUserMessage(
+            assistantMessage.content.trim().length > 0
+              ? `You stated "${assistantMessage.content.trim()}", but did not invoke any tools or provide your final analysis. If you need more information from the repository, please invoke the necessary tool(s) now. Otherwise, please provide your complete, detailed analysis answering all parts of the user request.`
+              : `Please provide your complete, detailed response to the user's request, or invoke the necessary tool(s) to continue investigating.`,
+          );
+          continue;
+        }
+
         const durationMs = Date.now() - startTime;
         this.logger.info(`Session ${sessionId} completed successfully at step ${step}`, {
           durationMs,
@@ -259,6 +294,7 @@ export class AgentRuntime {
       }
 
       // Execute requested tool calls sequentially
+      consecutiveIncompleteNudges = 0;
       for (const tc of toolCalls) {
         if (signal?.aborted) {
           break;

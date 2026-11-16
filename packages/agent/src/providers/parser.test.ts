@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOllamaToolCalls } from './parser.js';
+import { cleanToolCallMarkup, parseOllamaToolCalls } from './parser.js';
 
 describe('Ollama Tool Call Parser', () => {
   it('parses native Ollama tool calls with object arguments', () => {
@@ -51,6 +51,58 @@ I will read the configuration.
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe('fs_read');
     expect(result[0]?.arguments).toEqual({ path: 'package.json' });
+  });
+
+  it('extracts fallback tool calls from XML <tool_call> tags', () => {
+    const content = `
+Let me inspect the file.
+<tool_call>
+{"name": "read_file", "arguments": {"path": "packages/core/src/model/types.ts"}}
+</tool_call>
+    `;
+
+    const result = parseOllamaToolCalls([], content);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.name).toBe('read_file');
+    expect(result[0]?.arguments).toEqual({ path: 'packages/core/src/model/types.ts' });
+
+    expect(cleanToolCallMarkup(content)).toBe('Let me inspect the file.');
+  });
+
+  it('extracts multiple fallback tool calls from multiple XML <tool_call> tags', () => {
+    const content = `
+<tool_call>
+{"name": "read_file", "arguments": {"path": "a.ts"}}
+</tool_call>
+<tool_call>
+{"name": "read_file", "arguments": {"path": "b.ts"}}
+</tool_call>
+    `;
+
+    const result = parseOllamaToolCalls([], content);
+    expect(result).toHaveLength(2);
+    expect(result[0]?.name).toBe('read_file');
+    expect(result[0]?.arguments).toEqual({ path: 'a.ts' });
+    expect(result[1]?.name).toBe('read_file');
+    expect(result[1]?.arguments).toEqual({ path: 'b.ts' });
+  });
+
+  it('extracts array of tool calls in markdown fence', () => {
+    const content = `
+\`\`\`json
+[
+  { "name": "list_files", "arguments": { "path": "apps" } },
+  { "name": "list_files", "arguments": { "path": "packages" } }
+]
+\`\`\`
+    `;
+
+    const result = parseOllamaToolCalls([], content);
+    expect(result).toHaveLength(2);
+    expect(result[0]?.name).toBe('list_files');
+    expect(result[0]?.arguments).toEqual({ path: 'apps' });
+    expect(result[1]?.name).toBe('list_files');
+    expect(result[1]?.arguments).toEqual({ path: 'packages' });
   });
 
   it('returns empty array when no tool calls are present', () => {

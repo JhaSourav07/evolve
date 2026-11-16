@@ -498,6 +498,43 @@ describe('AgentRuntime', () => {
     const sessionStartedEvents = events.filter((e) => e.type === 'session_started');
     expect(sessionStartedEvents).toHaveLength(1);
   });
+
+  it('detects intermediate continuation fillers and nudges the model instead of prematurely terminating', async () => {
+    // Step 1: Model outputs "Let me continue" without tool calls
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: {
+        role: 'assistant',
+        content: 'Let me continue',
+      },
+    });
+
+    // Step 2: After being nudged, model provides the comprehensive final answer
+    provider.enqueueResponse({
+      finishReason: 'stop',
+      message: {
+        role: 'assistant',
+        content: 'Here is the complete analysis of the architecture and authentication system.',
+      },
+    });
+
+    const runtime = new AgentRuntime({
+      provider,
+      tools,
+      config: {
+        workspaceRoot: tmpDir,
+        maxSteps: 5,
+      },
+    });
+
+    const result = await runtime.run('Analyse this repository and explain authentication.');
+
+    expect(result.success).toBe(true);
+    expect(result.stepsExecuted).toBe(2);
+    expect(result.finalResponse).toBe(
+      'Here is the complete analysis of the architecture and authentication system.',
+    );
+  });
 });
 
 describe('ContextManager', () => {
