@@ -1,6 +1,6 @@
 {
   "name": "@evolve/db",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "SQLite local persistence layer and repositories for Evolve",
   "type": "module",
   "main": "./dist/index.js",

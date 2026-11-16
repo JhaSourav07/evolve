@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { EVOLVE_VERSION } from '@evolve/core';
 import { buildCli, formatCliBanner, initCliSession } from './index.js';
 
 describe('CLI Package', () => {
   it('formats the CLI banner using metadata from @evolve/core', () => {
     const banner = formatCliBanner();
-    expect(banner).toBe('Evolve v0.1.0 (Local-First: true)');
+    expect(banner).toBe(`Evolve v${EVOLVE_VERSION} (Local-First: true)`);
   });
 
   it('initializes a CLI session using @evolve/core types and schemas', () => {

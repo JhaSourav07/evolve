@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-11-16
+
+### Added
+
+- **Rich Terminal Markdown Rendering (`MarkdownRenderer`)**:
+  - Implemented rich terminal formatting for all model responses in the CLI using Ink and React.
+  - Headings rendered with bold text, accent colors, and stylized double/single rule dividers (`═`, `─`).
+  - Code blocks rendered inside rounded borders with language indicators (e.g. `[typescript]`, `[json]`) and syntax highlighting for keywords, strings, comments, and types.
+  - Inline formatting for `**bold**`, `*italic*`, `` `code` `` tags, and `[links](url)`.
+  - Structured rendering for bullet lists (`•`), numbered lists (`1.`), blockquotes (`>`), and horizontal rules (`---`).
+  - Formatted terminal table rendering with auto-computed column widths, header borders, and cell alignment.
+  - Added unit test suite verifying inline tokenization and block parsing across complex markdown responses (`MarkdownRenderer.test.ts`).
+
 ## [0.4.0] - 2026-11-16
 
 ### Added

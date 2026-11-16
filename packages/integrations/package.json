@@ -1,6 +1,6 @@
 {
   "name": "@evolve/integrations",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Interaction integrations and event adapters for Evolve: Terminal, VS Code, Pi, Claude, and Gemini",
   "type": "module",
   "main": "./dist/index.js",

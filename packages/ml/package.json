@@ -1,6 +1,6 @@
 {
   "name": "@evolve/ml",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Python ML fine-tuning and evaluation pipeline for Evolve",
   "private": true,
   "scripts": {

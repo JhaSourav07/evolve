@@ -1,6 +1,6 @@
 {
   "name": "@evolve/cli",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Interactive terminal user interface for the Evolve autonomous AI coding agent",
   "type": "module",
   "bin": {

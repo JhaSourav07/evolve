@@ -1,0 +1,510 @@
+import React from 'react';
+import { Box, Text } from 'ink';
+import { Theme } from './Theme.js';
+
+interface MarkdownRendererProps {
+  content: string;
+}
+
+/**
+ * Tokenizes inline markdown: **bold**, *italic*, `code`, [link](url), and plain text.
+ */
+interface InlineToken {
+  type: 'text' | 'bold' | 'italic' | 'code' | 'link';
+  text: string;
+  url?: string;
+}
+
+export function parseInlineTokens(line: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  let remaining = line;
+
+  // Regex to match inline patterns in priority order
+  const inlineRegex =
+    /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(_([^_]+)_)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/;
+
+  while (remaining.length > 0) {
+    const match = remaining.match(inlineRegex);
+    if (!match || match.index === undefined) {
+      tokens.push({ type: 'text', text: remaining });
+      break;
+    }
+
+    if (match.index > 0) {
+      tokens.push({ type: 'text', text: remaining.slice(0, match.index) });
+    }
+
+    if (match[2] !== undefined) {
+      // **bold**
+      tokens.push({ type: 'bold', text: match[2] });
+    } else if (match[4] !== undefined) {
+      // *italic*
+      tokens.push({ type: 'italic', text: match[4] });
+    } else if (match[6] !== undefined) {
+      // _italic_
+      tokens.push({ type: 'italic', text: match[6] });
+    } else if (match[8] !== undefined) {
+      // `code`
+      tokens.push({ type: 'code', text: match[8] });
+    } else if (match[10] !== undefined && match[11] !== undefined) {
+      // [text](url)
+      tokens.push({ type: 'link', text: match[10], url: match[11] });
+    }
+
+    remaining = remaining.slice(match.index + match[0].length);
+  }
+
+  return tokens;
+}
+
+export const FormattedInline: React.FC<{ text: string }> = ({ text }) => {
+  const tokens = parseInlineTokens(text);
+
+  return (
+    <Text color={Theme.colors.assistant}>
+      {tokens.map((token, idx) => {
+        switch (token.type) {
+          case 'bold':
+            return (
+              <Text key={idx} bold color={Theme.colors.text}>
+                {token.text}
+              </Text>
+            );
+          case 'italic':
+            return (
+              <Text key={idx} italic color={Theme.colors.dim}>
+                {token.text}
+              </Text>
+            );
+          case 'code':
+            return (
+              <Text key={idx} color={Theme.colors.accent} bold>
+                `{token.text}`
+              </Text>
+            );
+          case 'link':
+            return (
+              <Text key={idx} color={Theme.colors.user} underline>
+                {token.text}
+              </Text>
+            );
+          case 'text':
+          default:
+            return <Text key={idx}>{token.text}</Text>;
+        }
+      })}
+    </Text>
+  );
+};
+
+/**
+ * Basic syntax highlighting for code lines in terminal.
+ */
+function highlightCodeLine(line: string, _lang?: string): React.ReactNode {
+  const trimmed = line.trim();
+  if (trimmed.startsWith('//') || trimmed.startsWith('#')) {
+    return (
+      <Text color={Theme.colors.dim} italic>
+        {line}
+      </Text>
+    );
+  }
+
+  const parts: Array<{ text: string; isKeyword: boolean; isString: boolean }> = [];
+  let lastIndex = 0;
+
+  // Simple string and keyword matcher
+  const codeRegex =
+    /("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`|\b(const|let|var|function|class|interface|type|import|export|from|return|if|else|switch|case|default|for|while|do|break|continue|try|catch|finally|throw|new|async|await|public|private|protected|readonly|def|self|None|True|False|select|from|where|insert|update|delete)\b)/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = codeRegex.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        text: line.slice(lastIndex, match.index),
+        isKeyword: false,
+        isString: false,
+      });
+    }
+
+    const matchedText = match[0];
+    const isStr =
+      matchedText.startsWith('"') || matchedText.startsWith("'") || matchedText.startsWith('`');
+
+    parts.push({
+      text: matchedText,
+      isKeyword: !isStr,
+      isString: isStr,
+    });
+
+    lastIndex = match.index + matchedText.length;
+  }
+
+  if (lastIndex < line.length) {
+    parts.push({
+      text: line.slice(lastIndex),
+      isKeyword: false,
+      isString: false,
+    });
+  }
+
+  if (parts.length === 0) {
+    return <Text color={Theme.colors.text}>{line}</Text>;
+  }
+
+  return parts.map((part, i) => {
+    if (part.isKeyword) {
+      return (
+        <Text key={i} color={Theme.colors.accent} bold>
+          {part.text}
+        </Text>
+      );
+    }
+    if (part.isString) {
+      return (
+        <Text key={i} color={Theme.colors.success}>
+          {part.text}
+        </Text>
+      );
+    }
+    return (
+      <Text key={i} color={Theme.colors.text}>
+        {part.text}
+      </Text>
+    );
+  });
+}
+
+/**
+ * Markdown block types for structured rendering.
+ */
+type MarkdownBlock =
+  | { type: 'heading'; level: number; text: string }
+  | { type: 'code_block'; lang: string; lines: string[] }
+  | { type: 'horizontal_rule' }
+  | { type: 'blockquote'; text: string }
+  | { type: 'bullet_item'; indent: number; text: string }
+  | { type: 'numbered_item'; indent: number; number: string; text: string }
+  | { type: 'table'; headers: string[]; rows: string[][] }
+  | { type: 'paragraph'; text: string }
+  | { type: 'blank' };
+
+export function parseMarkdownBlocks(rawContent: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  const lines = rawContent.split(/\r?\n/);
+  let i = 0;
+
+  while (i < lines.length) {
+    const rawLine = lines[i] ?? '';
+    const trimmed = rawLine.trim();
+
+    // 1. Code blocks: ```lang ... ```
+    if (trimmed.startsWith('```')) {
+      const lang = trimmed.replace(/^```/, '').trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !(lines[i]?.trim().startsWith('```'))) {
+        codeLines.push(lines[i] ?? '');
+        i++;
+      }
+      i++; // skip closing ```
+      blocks.push({ type: 'code_block', lang, lines: codeLines });
+      continue;
+    }
+
+    // 2. Blank line
+    if (!trimmed) {
+      blocks.push({ type: 'blank' });
+      i++;
+      continue;
+    }
+
+    // 3. Horizontal Rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      blocks.push({ type: 'horizontal_rule' });
+      i++;
+      continue;
+    }
+
+    // 4. Headings: #, ##, ###, ####
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch && headingMatch[1] && headingMatch[2]) {
+      blocks.push({
+        type: 'heading',
+        level: headingMatch[1].length,
+        text: headingMatch[2].trim(),
+      });
+      i++;
+      continue;
+    }
+
+    // 5. Blockquote: > text
+    if (trimmed.startsWith('>')) {
+      const quoteText = trimmed.replace(/^>\s*/, '');
+      blocks.push({ type: 'blockquote', text: quoteText });
+      i++;
+      continue;
+    }
+
+    // 6. Markdown Table: starts with | and contains |
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.split('|').length > 2) {
+      const tableLines: string[] = [];
+      while (
+        i < lines.length &&
+        lines[i]!.trim().startsWith('|') &&
+        lines[i]!.trim().endsWith('|')
+      ) {
+        tableLines.push(lines[i]!.trim());
+        i++;
+      }
+
+      if (tableLines.length >= 2) {
+        const headerRow = tableLines[0]!
+          .slice(1, -1)
+          .split('|')
+          .map((c) => c.trim());
+        const dataRows = tableLines
+          .slice(2)
+          .map((row) =>
+            row
+              .slice(1, -1)
+              .split('|')
+              .map((c) => c.trim()),
+          );
+
+        blocks.push({ type: 'table', headers: headerRow, rows: dataRows });
+        continue;
+      }
+    }
+
+    // 7. Bullet lists: - item, * item, + item
+    const bulletMatch = rawLine.match(/^(\s*)([-*+])\s+(.+)$/);
+    if (bulletMatch && bulletMatch[1] !== undefined && bulletMatch[3]) {
+      const indent = Math.floor(bulletMatch[1].length / 2);
+      blocks.push({
+        type: 'bullet_item',
+        indent,
+        text: bulletMatch[3].trim(),
+      });
+      i++;
+      continue;
+    }
+
+    // 8. Numbered lists: 1. item
+    const numberedMatch = rawLine.match(/^(\s*)(\d+)\.\s+(.+)$/);
+    if (numberedMatch && numberedMatch[1] !== undefined && numberedMatch[2] && numberedMatch[3]) {
+      const indent = Math.floor(numberedMatch[1].length / 2);
+      blocks.push({
+        type: 'numbered_item',
+        indent,
+        number: numberedMatch[2],
+        text: numberedMatch[3].trim(),
+      });
+      i++;
+      continue;
+    }
+
+    // 9. Default Paragraph
+    blocks.push({ type: 'paragraph', text: rawLine });
+    i++;
+  }
+
+  return blocks;
+}
+
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
+  if (!content || content.trim().length === 0) {
+    return null;
+  }
+
+  const blocks = parseMarkdownBlocks(content);
+
+  return (
+    <Box flexDirection="column" marginY={0}>
+      {blocks.map((block, index) => {
+        switch (block.type) {
+          case 'heading': {
+            if (block.level === 1) {
+              return (
+                <Box key={index} flexDirection="column" marginTop={1} marginBottom={1}>
+                  <Text color={Theme.colors.accent} bold>
+                    ✦ {block.text.toUpperCase()}
+                  </Text>
+                  <Text color={Theme.colors.border}>
+                    {'═'.repeat(Math.min(65, block.text.length + 6))}
+                  </Text>
+                </Box>
+              );
+            }
+            if (block.level === 2) {
+              return (
+                <Box key={index} flexDirection="column" marginTop={1} marginBottom={0}>
+                  <Text color={Theme.colors.accent} bold>
+                    ## {block.text}
+                  </Text>
+                  <Text color={Theme.colors.border}>
+                    {'─'.repeat(Math.min(50, block.text.length + 6))}
+                  </Text>
+                </Box>
+              );
+            }
+            if (block.level === 3) {
+              return (
+                <Box key={index} marginTop={1} marginBottom={0}>
+                  <Text color={Theme.colors.user} bold>
+                    ### {block.text}
+                  </Text>
+                </Box>
+              );
+            }
+            return (
+              <Box key={index} marginTop={0} marginBottom={0}>
+                <Text color={Theme.colors.tool} bold>
+                  {block.text}
+                </Text>
+              </Box>
+            );
+          }
+
+          case 'code_block': {
+            return (
+              <Box
+                key={index}
+                flexDirection="column"
+                borderStyle="round"
+                borderColor={Theme.colors.border}
+                paddingX={1}
+                paddingY={0}
+                marginY={1}
+              >
+                {block.lang ? (
+                  <Box justifyContent="space-between" marginBottom={0}>
+                    <Text color={Theme.colors.tool} bold>
+                      [{block.lang}]
+                    </Text>
+                  </Box>
+                ) : null}
+                <Box flexDirection="column">
+                  {block.lines.map((line, lIdx) => (
+                    <Box key={lIdx}>
+                      {highlightCodeLine(line, block.lang)}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            );
+          }
+
+          case 'horizontal_rule':
+            return (
+              <Box key={index} marginY={1}>
+                <Text color={Theme.colors.border}>{'─'.repeat(55)}</Text>
+              </Box>
+            );
+
+          case 'blockquote':
+            return (
+              <Box
+                key={index}
+                borderStyle="single"
+                borderLeft={true}
+                borderRight={false}
+                borderTop={false}
+                borderBottom={false}
+                borderColor={Theme.colors.accent}
+                paddingLeft={1}
+                marginY={0}
+              >
+                <FormattedInline text={block.text} />
+              </Box>
+            );
+
+          case 'bullet_item':
+            return (
+              <Box key={index} paddingLeft={block.indent * 2 + 1} marginY={0}>
+                <Text color={Theme.colors.accent}>• </Text>
+                <FormattedInline text={block.text} />
+              </Box>
+            );
+
+          case 'numbered_item':
+            return (
+              <Box key={index} paddingLeft={block.indent * 2 + 1} marginY={0}>
+                <Text color={Theme.colors.user} bold>
+                  {block.number}.{' '}
+                </Text>
+                <FormattedInline text={block.text} />
+              </Box>
+            );
+
+          case 'table': {
+            // Compute max widths per column
+            const numCols = block.headers.length;
+            const colWidths = block.headers.map((h) => Math.min(30, Math.max(h.length, 6)));
+
+            for (const row of block.rows) {
+              row.forEach((cell, cIdx) => {
+                if (cIdx < numCols) {
+                  colWidths[cIdx] = Math.min(
+                    35,
+                    Math.max(colWidths[cIdx] ?? 6, cell.length),
+                  );
+                }
+              });
+            }
+
+            return (
+              <Box
+                key={index}
+                flexDirection="column"
+                borderStyle="single"
+                borderColor={Theme.colors.border}
+                paddingX={1}
+                paddingY={0}
+                marginY={1}
+              >
+                {/* Header row */}
+                <Box>
+                  {block.headers.map((h, cIdx) => (
+                    <Box key={cIdx} width={(colWidths[cIdx] ?? 10) + 2}>
+                      <Text color={Theme.colors.accent} bold>
+                        {h}
+                      </Text>
+                    </Box>
+                  ))}
+                </Box>
+                {/* Divider */}
+                <Box>
+                  <Text color={Theme.colors.border}>
+                    {colWidths.map((w) => '─'.repeat(w + 1)).join('┼')}
+                  </Text>
+                </Box>
+                {/* Data rows */}
+                {block.rows.map((row, rIdx) => (
+                  <Box key={rIdx}>
+                    {row.map((cell, cIdx) => (
+                      <Box key={cIdx} width={(colWidths[cIdx] ?? 10) + 2}>
+                        <FormattedInline text={cell} />
+                      </Box>
+                    ))}
+                  </Box>
+                ))}
+              </Box>
+            );
+          }
+
+          case 'blank':
+            return <Box key={index} height={1} />;
+
+          case 'paragraph':
+          default:
+            return (
+              <Box key={index} marginY={0}>
+                <FormattedInline text={block.text} />
+              </Box>
+            );
+        }
+      })}
+    </Box>
+  );
+};

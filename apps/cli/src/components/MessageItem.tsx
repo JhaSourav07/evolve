@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Theme } from './Theme.js';
+import { MarkdownRenderer } from './MarkdownRenderer.js';
 
 export interface ChatMessage {
   id: string;
@@ -84,7 +85,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           )}
 
           <Box paddingLeft={2} marginTop={message.thinking ? 1 : 0}>
-            <Text color={Theme.colors.assistant}>{message.content}</Text>
+            <MarkdownRenderer content={message.content} />
           </Box>
         </Box>
       );
