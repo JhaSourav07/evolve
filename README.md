@@ -22,8 +22,41 @@ It combines a reactive **Sense-Plan-Act-Reflect** cognitive engine, sandboxed ex
 
 ---
 
+## ⚡ Quick Install (1-Click Download)
+
+Install Evolve in seconds with a single command — just like Claude Code:
+
+### macOS / Linux
+```bash
+curl -fsSL https://raw.githubusercontent.com/JhaSourav07/evolve/main/install.sh | bash
+```
+
+### Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/JhaSourav07/evolve/main/install.ps1 | iex
+```
+
+### npm / npx (Global CLI)
+```bash
+# Global install
+npm install -g https://github.com/JhaSourav07/evolve.git
+
+# Or run instantly without installing
+npx https://github.com/JhaSourav07/evolve.git
+```
+
+> **Requirements:** [Node.js](https://nodejs.org/) (>= 20) and [Ollama](https://ollama.ai) running locally (`ollama run qwen2.5-coder:7b`).
+
+Once installed, simply open any project directory and run:
+```bash
+evolve
+```
+
+---
+
 ## Table of Contents
 
+- [⚡ Quick Install (1-Click Download)](#-quick-install-1-click-download)
 - [Key Capabilities](#key-capabilities)
 - [System Architecture](#system-architecture)
 - [Terminal User Interface](#terminal-user-interface)
@@ -178,10 +211,9 @@ evolve/
 
 ### Prerequisites
 
-- **Node.js**: `>= 22.0.0`
-- **pnpm**: `>= 10.0.0`
+- **Node.js**: `>= 20.0.0` (Node 22 LTS recommended)
 - **Git**
-- **Ollama**: Running locally with a coding model installed:
+- **Ollama**: Running locally with your chosen coding model:
   ```bash
   # Install and start Ollama (if not already running)
   curl -fsSL https://ollama.com/install.sh | sh
@@ -189,9 +221,24 @@ evolve/
   ```
 - **Python**: `>= 3.11` _(required only when running the ML fine-tuning pipeline)_
 
-### Installation & Build
+### Option 1: 1-Click Automated Install (Recommended)
 
-Clone the repository and build the workspace:
+Run the single-command installer to automatically build and install the `evolve` CLI globally:
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/JhaSourav07/evolve/main/install.sh | bash
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/JhaSourav07/evolve/main/install.ps1 | iex
+```
+
+Once installed, execute `evolve` anywhere:
+```bash
+evolve
+```
+
+### Option 2: Install from Source (Contributors)
 
 ```bash
 # Clone the repository
@@ -203,19 +250,25 @@ pnpm install
 
 # Build all TypeScript packages using project references
 pnpm run build
+
+# Link globally (optional)
+npm link apps/cli
+
+# Run Evolve
+pnpm evolve
 ```
 
 ### Running Evolve
 
 ```bash
-# Launch interactive terminal mode
-pnpm evolve
+# Launch interactive full-screen terminal mode
+evolve
 
 # Run with an immediate one-shot task
-pnpm evolve chat "Inspect package.json and summarize workspace dependencies"
+evolve chat "Inspect package.json and summarize workspace dependencies"
 
 # Verify system health, Ollama status, and SQLite database
-pnpm evolve status
+evolve status
 ```
 
 ---

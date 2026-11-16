@@ -4,7 +4,12 @@
   "private": true,
   "description": "Autonomous, local-first, self-improving AI software engineer built from scratch with TypeScript, SQLite, and Ollama",
   "type": "module",
+  "bin": {
+    "evolve": "./apps/cli/dist/index.js"
+  },
   "scripts": {
+    "evolve": "node apps/cli/dist/index.js",
+    "start": "node apps/cli/dist/index.js",
     "build": "tsc -b",
     "clean": "tsc -b --clean && git clean -xdf -e node_modules",
     "format": "prettier --write .",
