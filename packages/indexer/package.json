@@ -1,0 +1,38 @@
+{
+  "name": "@evolve/indexer",
+  "version": "0.1.0",
+  "description": "Repository discovery, AST parsing, code indexing, and context retrieval for Evolve",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@evolve/core": "workspace:*",
+    "@evolve/db": "workspace:*",
+    "ignore": "^7.0.14",
+    "typescript": "~5.8.2",
+    "zod": "^4.6.7"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "indexer",
+    "ast",
+    "code-intelligence",
+    "fts5",
+    "retrieval"
+  ],
+  "author": "Sourav Jha",
+  "license": "MIT"
+}
