@@ -1,6 +1,6 @@
 {
   "name": "@evolve/indexer",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Repository discovery, AST parsing, code indexing, and context retrieval for Evolve",
   "type": "module",
   "main": "./dist/index.js",

@@ -5,9 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-11-16
 
 ### Added
+
+- **Official Brand & Logo**: Added high-resolution visual identity branding and logo in `assets/logo.jpg`.
+- **1-Click / One-Line Installers**:
+  - `install.sh`: Automated macOS & Linux installer with dependency verification, pnpm build, and PATH configuration.
+  - `install.ps1`: Automated Windows PowerShell installer.
+  - Global `npx` and `npm install -g` execution support via root `bin` entry.
+- **Repository Intelligence Architecture (`@evolve/indexer`)**:
+  - `ProjectScanner`: Deep discovery detecting project roots, Git status, multi-language distributions, framework identification, and monorepo structures.
+  - Strict exclusion engine respecting `.gitignore` and excluding binaries, build artifacts, dependencies, and sensitive credentials.
+  - AST symbol extraction using TypeScript Compiler API (`TypeScriptAstParser`) and polyglot fallback (`GenericRegexParser`) for Python, Go, Rust, Java, and C/C++.
+  - `RepositoryIndexer`: Incremental file indexing tracking `mtime` and SHA-256 hashes, avoiding redundant work, and persisting into SQLite with FTS5 virtual tables (`repo_code_fts`).
+  - `ContextRetriever`: Multi-signal relevance ranking (path matches, symbol declarations, FTS5 BM25 keyword hits, and dependency graph proximity) producing compact, token-budgeted prompt excerpts.
+  - 6 new agent tools: `inspect_project`, `get_project_structure`, `find_symbol`, `find_references`, `get_dependencies`, `get_related_files`.
+- **Large Context & Ollama 32k Support**:
+  - Configured `num_ctx: 32768` buffer allocation in Ollama provider to prevent mid-stream token truncation on large codebases.
+  - Increased `ContextManager` max tokens budget to 24,576 tokens.
+- **Incomplete Continuation Protection & Recovery**:
+  - Added detection for intermediate model thoughts/continuation phrases ("Let me continue", "Let me check...") without tool calls, automatically injecting recovery nudges to keep the agent loop moving forward to a complete final answer.
+  - Separated internal thinking channels from user-facing responses, and added XML `<tool_call>` and JSON array fallback parsing.
 
 - Initialized repository and public GitHub remote at `https://github.com/JhaSourav07/evolve`.
 - Configured pnpm monorepo workspace for `packages/*` and `apps/*`.

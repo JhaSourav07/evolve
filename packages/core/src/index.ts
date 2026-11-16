@@ -1,4 +1,4 @@
-export const EVOLVE_VERSION = '0.1.0' as const;
+export const EVOLVE_VERSION = '0.4.0' as const;
 
 export interface EvolveInfo {
   name: string;

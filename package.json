@@ -1,6 +1,6 @@
 {
   "name": "evolve-monorepo",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Autonomous, local-first, self-improving AI software engineer built from scratch with TypeScript, SQLite, and Ollama",
   "type": "module",

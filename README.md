@@ -1,4 +1,6 @@
-# Evolve
+<p align="center">
+  <img src="assets/logo.jpg" alt="Evolve AI Logo" width="680" />
+</p>
 
 <p align="center">
   <strong>Autonomous, local-first, self-improving AI software engineer.</strong>
