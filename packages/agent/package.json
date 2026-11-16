@@ -20,6 +20,7 @@
   "dependencies": {
     "@evolve/core": "workspace:*",
     "@evolve/db": "workspace:*",
+    "@evolve/indexer": "workspace:*",
     "zod": "^4.6.7"
   },
   "keywords": [

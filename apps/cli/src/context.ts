@@ -167,6 +167,8 @@ export class CliContext {
         temperature: this.config.model.temperature,
         systemPrompt,
         requestApproval: approvalHandler,
+        projectId: this.projectId,
+        database: this.dbInstance,
       },
     });
   }

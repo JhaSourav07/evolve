@@ -34,31 +34,37 @@ export class ContextManager {
   }
 
   public getSystemPrompt(): string {
-    const basePrompt =
-      this.customSystemPrompt ??
-      [
-        'You are Evolve, an autonomous AI software engineering agent designed to solve development tasks reliably.',
-        'You have access to tools to inspect your environment, read files, and write code.',
-        `Workspace root: ${this.workspaceRoot}`,
-        '',
-        'Operational Guidelines:',
-        '1. Analyze the user request thoroughly.',
-        '2. Use available tools whenever you need to explore or modify files.',
-        '3. Always inspect existing code before modifying or creating new files.',
-        '4. When your task is finished, provide a clear, concise final answer summarizing your solution without calling any more tools.',
-      ].join('\n');
+    const coreInstructions = [
+      'You are Evolve, an autonomous AI software engineering agent designed to solve development tasks reliably.',
+      'You have access to tools to inspect your environment, read files, search code, and write code.',
+      `Workspace root: ${this.workspaceRoot}`,
+      '',
+      'Repository Intelligence Guidelines:',
+      '1. NEVER guess or invent repository files, architecture, or code. Always inspect actual files using your tools.',
+      '2. To understand project architecture, tech stack, or frameworks: use `inspect_project` or `get_project_structure`.',
+      '3. To locate functions, classes, interfaces, or models: use `find_symbol(name="...")`.',
+      '4. To locate where a symbol, model, or route is used: use `find_references(symbol="...")`.',
+      '5. To understand module imports, dependencies, or reverse importers: use `get_dependencies(path="...")` and `get_related_files(path="...")`.',
+      '6. To search text or regex across code: use `search_code(query="...")`.',
+      '7. To read specific code sections: use `read_file(path="...", startLine=..., endLine=...)`.',
+      '8. When your task is finished, provide a clear, grounded final answer based strictly on real repository evidence without calling any more tools.',
+    ].join('\n');
 
-    if (this.injectedMemories.length === 0) {
-      return basePrompt;
+    const sections = [coreInstructions];
+
+    if (this.customSystemPrompt) {
+      sections.push('', this.customSystemPrompt);
     }
 
-    const memoryLines = [
-      '',
-      'Relevant Past Experiences & Project Preferences:',
-      ...this.injectedMemories.map((m) => `- [${m.category}] ${m.key}: ${m.content}`),
-    ];
+    if (this.injectedMemories.length > 0) {
+      sections.push(
+        '',
+        'Relevant Past Experiences & Project Preferences:',
+        ...this.injectedMemories.map((m) => `- [${m.category}] ${m.key}: ${m.content}`),
+      );
+    }
 
-    return `${basePrompt}\n${memoryLines.join('\n')}`;
+    return sections.join('\n');
   }
 
   /**

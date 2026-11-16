@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/indexer" },
     { "path": "../../packages/agent" },
     { "path": "../../packages/integrations" }
   ],

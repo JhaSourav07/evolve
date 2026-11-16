@@ -16,6 +16,8 @@ export interface AgentRuntimeConfig {
   systemPrompt?: string | undefined;
   maxContextTokens?: number | undefined;
   requestApproval?: ToolApprovalHandler | undefined;
+  projectId?: string | undefined;
+  database?: unknown | undefined;
 }
 
 export interface EventPublisherLike {

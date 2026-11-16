@@ -41,6 +41,9 @@ importers:
       '@evolve/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@evolve/indexer':
+        specifier: workspace:*
+        version: link:../../packages/indexer
       '@evolve/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -66,6 +69,9 @@ importers:
       '@evolve/db':
         specifier: workspace:*
         version: link:../db
+      '@evolve/indexer':
+        specifier: workspace:*
+        version: link:../indexer
       zod:
         specifier: ^4.6.7
         version: 4.6.7

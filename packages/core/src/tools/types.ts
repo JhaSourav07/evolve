@@ -22,6 +22,8 @@ export interface ToolExecutionContext {
   signal?: AbortSignal | undefined;
   logger: Logger;
   requestApproval?: ToolApprovalHandler | undefined;
+  projectId?: string | undefined;
+  database?: unknown | undefined;
 }
 
 export interface ToolExecutionResult<TData = unknown> {

@@ -35,9 +35,9 @@ describe('Evolve Tool Execution Package', () => {
   });
 
   describe('ToolRegistry', () => {
-    it('creates default registry with all 9 tools registered', () => {
+    it('creates default registry with all 15 tools registered', () => {
       const registry = createDefaultToolRegistry();
-      expect(registry.list().length).toBe(9);
+      expect(registry.list().length).toBe(15);
       expect(registry.has('read_file')).toBe(true);
       expect(registry.has('write_file')).toBe(true);
       expect(registry.has('edit_file')).toBe(true);
@@ -47,9 +47,15 @@ describe('Evolve Tool Execution Package', () => {
       expect(registry.has('run_tests')).toBe(true);
       expect(registry.has('git_status')).toBe(true);
       expect(registry.has('git_diff')).toBe(true);
+      expect(registry.has('inspect_project')).toBe(true);
+      expect(registry.has('get_project_structure')).toBe(true);
+      expect(registry.has('find_symbol')).toBe(true);
+      expect(registry.has('find_references')).toBe(true);
+      expect(registry.has('get_dependencies')).toBe(true);
+      expect(registry.has('get_related_files')).toBe(true);
 
       const definitions = registry.toModelDefinitions();
-      expect(definitions.length).toBe(9);
+      expect(definitions.length).toBe(15);
       for (const def of definitions) {
         expect(def.name).toBeDefined();
         expect(def.description).toBeDefined();

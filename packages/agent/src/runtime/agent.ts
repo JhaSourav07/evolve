@@ -301,6 +301,8 @@ export class AgentRuntime {
                 ...(this.config.requestApproval
                   ? { requestApproval: this.config.requestApproval }
                   : {}),
+                ...(this.config.projectId ? { projectId: this.config.projectId } : {}),
+                ...(this.config.database ? { database: this.config.database } : {}),
               });
               output = execResult.output;
               isSuccess = execResult.success;

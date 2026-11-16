@@ -1,20 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentTool } from '@evolve/core';
+import { createExclusionFilter } from '@evolve/indexer';
 import { z } from 'zod';
-import { assertSafePath, checkApproval, isSensitiveFile } from './security.js';
-
-const DEFAULT_IGNORED_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '.next',
-  '.turbo',
-  '.evolve',
-  '.cache',
-  'coverage',
-]);
+import { assertSafePath, checkApproval } from './security.js';
 
 const BINARY_EXTENSIONS = new Set([
   '.png',
@@ -34,13 +23,18 @@ const BINARY_EXTENSIONS = new Set([
 ]);
 
 export const readFileTool: AgentTool<
-  { path: string; maxBytes?: number | undefined },
+  {
+    path: string;
+    maxBytes?: number | undefined;
+    startLine?: number | undefined;
+    endLine?: number | undefined;
+  },
   { path: string; bytesRead: number; content: string; truncated: boolean }
 > = {
   definition: {
     name: 'read_file',
     description:
-      'Reads the text content of a file within the workspace root. Blocks sensitive files.',
+      'Reads the text content of a file within the workspace root. Supports optional line-range slicing.',
     parameters: z.object({
       path: z.string().min(1).describe('Relative path to the file to read'),
       maxBytes: z
@@ -49,9 +43,21 @@ export const readFileTool: AgentTool<
         .positive()
         .optional()
         .describe('Maximum bytes to read (default 500KB)'),
+      startLine: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Optional starting line number (1-based, inclusive)'),
+      endLine: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Optional ending line number (1-based, inclusive)'),
     }),
   },
-  async execute({ path: targetPath, maxBytes = 512_000 }, context) {
+  async execute({ path: targetPath, maxBytes = 512_000, startLine, endLine }, context) {
     try {
       const safePath = assertSafePath(targetPath, context.workspaceRoot);
 
@@ -82,6 +88,26 @@ export const readFileTool: AgentTool<
       }
 
       const raw = fs.readFileSync(safePath, 'utf-8');
+
+      // Line slicing support
+      if (startLine !== undefined || endLine !== undefined) {
+        const lines = raw.split('\n');
+        const start = Math.max(1, startLine ?? 1);
+        const end = Math.min(lines.length, endLine ?? lines.length);
+        const selected = lines.slice(start - 1, end);
+        const formatted = selected.map((l, idx) => `${start + idx}: ${l}`).join('\n');
+        return {
+          success: true,
+          output: formatted,
+          data: {
+            path: targetPath,
+            bytesRead: formatted.length,
+            content: formatted,
+            truncated: false,
+          },
+        };
+      }
+
       const truncated = raw.length > maxBytes;
       const content = truncated ? raw.slice(0, maxBytes) : raw;
       const output = truncated
@@ -286,6 +312,7 @@ export const listFilesTool: AgentTool<
       }
 
       const items: Array<{ path: string; isDirectory: boolean; size: number }> = [];
+      const filter = createExclusionFilter(context.workspaceRoot);
 
       function walk(currentDir: string, depth: number) {
         if (items.length >= limit || depth > maxDepth) {
@@ -297,13 +324,13 @@ export const listFilesTool: AgentTool<
           if (items.length >= limit) break;
 
           const name = entry.name;
-          if (DEFAULT_IGNORED_DIRS.has(name) || isSensitiveFile(name)) {
+          const fullPath = path.join(currentDir, name);
+          const relPath = path.relative(context.workspaceRoot, fullPath).replace(/\\/g, '/');
+          const isDir = entry.isDirectory();
+
+          if (filter.isExcluded(relPath, isDir)) {
             continue;
           }
-
-          const fullPath = path.join(currentDir, name);
-          const relPath = path.relative(context.workspaceRoot, fullPath);
-          const isDir = entry.isDirectory();
 
           let size = 0;
           if (!isDir) {
@@ -384,6 +411,34 @@ export const searchCodeTool: AgentTool<
   async execute({ query, path: subPath = '.', isRegex = false, maxResults = 50 }, context) {
     try {
       const safeRoot = assertSafePath(subPath, context.workspaceRoot);
+      const filter = createExclusionFilter(context.workspaceRoot);
+
+      // Fast-path: Check FTS5 index if searching across full workspace without regex
+      if (subPath === '.' && !isRegex) {
+        try {
+          const { getWorkspaceDb, getProjectId } = await import('./repo.js');
+          const { CodeSearchEngine } = await import('@evolve/indexer');
+          const db = getWorkspaceDb(context.workspaceRoot, context.database);
+          const projectId = getProjectId(context.workspaceRoot, context.projectId);
+          const engine = new CodeSearchEngine(db.sqlite, context.workspaceRoot);
+          const ftsRes = engine.search(query, { projectId, maxResults });
+
+          if (ftsRes.matches.length > 0) {
+            const formatted = ftsRes.matches.map((m) => `${m.file}:${m.line} ${m.text}`).join('\n');
+            return {
+              success: true,
+              output: formatted,
+              data: {
+                matches: ftsRes.matches,
+                totalMatches: ftsRes.matches.length,
+              },
+            };
+          }
+        } catch {
+          // Fall back to live file walk on error
+        }
+      }
+
       const matches: Array<{ file: string; line: number; text: string }> = [];
 
       let regex: RegExp;
@@ -398,9 +453,8 @@ export const searchCodeTool: AgentTool<
       function scanFile(filePath: string) {
         if (matches.length >= maxResults) return;
 
-        const relPath = path.relative(context.workspaceRoot, filePath);
-        const ext = path.extname(filePath).toLowerCase();
-        if (BINARY_EXTENSIONS.has(ext) || isSensitiveFile(relPath)) {
+        const relPath = path.relative(context.workspaceRoot, filePath).replace(/\\/g, '/');
+        if (filter.isExcluded(relPath, false)) {
           return;
         }
 
@@ -437,12 +491,15 @@ export const searchCodeTool: AgentTool<
         for (const entry of entries) {
           if (matches.length >= maxResults) break;
           const name = entry.name;
-          if (DEFAULT_IGNORED_DIRS.has(name) || isSensitiveFile(name)) {
+          const fullPath = path.join(current, name);
+          const relPath = path.relative(context.workspaceRoot, fullPath).replace(/\\/g, '/');
+          const isDir = entry.isDirectory();
+
+          if (filter.isExcluded(relPath, isDir)) {
             continue;
           }
 
-          const fullPath = path.join(current, name);
-          if (entry.isDirectory()) {
+          if (isDir) {
             walk(fullPath);
           } else {
             scanFile(fullPath);
