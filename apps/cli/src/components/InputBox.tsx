@@ -11,6 +11,7 @@ export interface InputBoxProps {
 }
 
 const SLASH_COMMANDS = [
+  '/run',
   '/plan',
   '/model',
   '/models',

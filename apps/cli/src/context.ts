@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
-import { AgentRuntime, createDefaultToolRegistry, OllamaProvider } from '@evolve/agent';
+import {
+  AgentRuntime,
+  createDefaultToolRegistry,
+  OllamaProvider,
+  PlanExecutor,
+} from '@evolve/agent';
 import {
   createSessionId,
   type EvolveConfig,
@@ -243,6 +248,16 @@ export class CliContext {
         projectId: this.projectId,
         database: this.dbInstance,
       },
+    });
+  }
+
+  public createPlanExecutor(maxDebugAttempts?: number): PlanExecutor {
+    return new PlanExecutor({
+      provider: this.provider,
+      workspaceRoot: this.rootDir,
+      database: this.dbInstance,
+      eventSink: this.eventService,
+      maxDebugAttempts,
     });
   }
 

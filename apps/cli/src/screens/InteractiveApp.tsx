@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Static, useApp } from 'ink';
-import type { EventEnvelope, ToolApprovalRequest, Plan, PlanId } from '@evolve/core';
+import type { EventEnvelope, ToolApprovalRequest, Plan, PlanId, PlanTask } from '@evolve/core';
 import type { AgentRuntime } from '@evolve/agent';
 import { Header } from '../components/Header.js';
 import { HistoryList, type SessionSummary } from '../components/HistoryList.js';
@@ -14,6 +14,7 @@ import { StatusCard, type StatusData } from '../components/StatusCard.js';
 import { ToolApprovalPrompt } from '../components/ToolApprovalPrompt.js';
 import { FeedbackPrompt } from '../components/FeedbackPrompt.js';
 import { PlanCard } from '../components/PlanCard.js';
+import { PlanExecutionCard } from '../components/PlanExecutionCard.js';
 import { PlanHistoryList } from '../components/PlanHistoryList.js';
 import { ToolExecution } from '../components/ToolExecution.js';
 import { MarkdownRenderer } from '../components/MarkdownRenderer.js';
@@ -113,6 +114,21 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   const [statusData, setStatusData] = useState<StatusData | null>(null);
   const [historySessions, setHistorySessions] = useState<SessionSummary[]>([]);
   const [memoriesList, setMemoriesList] = useState<MemoryEntry[]>([]);
+
+  // Active Plan Execution state
+  const [executionState, setExecutionState] = useState<{
+    plan: Plan;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    currentTaskIndex: number;
+    currentTask?: PlanTask | undefined;
+    activeTool?: { toolName: string; detail?: string } | undefined;
+    activeStage?: { stage: string; status: 'running' | 'passed' | 'failed' } | undefined;
+    completedTasks: number;
+    failedTasks: number;
+    filesModified: string[];
+    durationMs: number;
+    error?: string | undefined;
+  } | null>(null);
 
   // Clean cursor on unmount
   useEffect(() => {
@@ -541,6 +557,205 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     }
   };
 
+  const handleRunPlan = async (targetPlanId?: string) => {
+    let planToRun: Plan | undefined;
+    if (targetPlanId) {
+      planToRun = context.planRepo.findById(targetPlanId);
+      if (!planToRun) {
+        setStaticMessages((prev) => [
+          ...prev,
+          {
+            id: `err_${++msgCounterRef.current}`,
+            role: 'error',
+            content: `Plan not found: ${targetPlanId}`,
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
+    } else if (activePlan) {
+      planToRun = activePlan;
+    } else {
+      const projectPlans = context.planRepo.findByProjectId(context.projectId);
+      planToRun = projectPlans.find((p) => p.status === 'approved') || projectPlans[0];
+    }
+
+    if (!planToRun) {
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_${++msgCounterRef.current}`,
+          role: 'system',
+          content: 'No implementation plan available to run. Generate one first using /plan <objective>.',
+          timestamp: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    if (planToRun.status !== 'approved') {
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_${++msgCounterRef.current}`,
+          role: 'system',
+          content: `Plan ${planToRun!.planId} is currently '${planToRun!.status}'. Approve it first using: /plan approve ${planToRun!.planId}`,
+          timestamp: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    setActivePlan(planToRun);
+    setScreen('chat');
+    setIsLoading(true);
+    abortControllerRef.current = new AbortController();
+
+    setExecutionState({
+      plan: planToRun,
+      status: 'running',
+      currentTaskIndex: 0,
+      currentTask: planToRun.tasks[0],
+      completedTasks: 0,
+      failedTasks: 0,
+      filesModified: [],
+      durationMs: 0,
+    });
+
+    try {
+      const executor = context.createPlanExecutor();
+
+      executor.getEventBus().on('task_started', (evt) => {
+        const t = planToRun!.tasks.find((task) => task.id === evt.payload.taskId);
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentTaskIndex: evt.payload.taskIndex,
+                currentTask: t,
+                activeTool: undefined,
+                activeStage: undefined,
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('tool_execution_started', (evt) => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeTool: { toolName: evt.payload.toolName },
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('tool_execution_completed', () => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeTool: undefined,
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('verification_started', (evt) => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeStage: { stage: evt.payload.stage, status: 'running' },
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('verification_completed', (evt) => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeStage: {
+                  stage: evt.payload.stage,
+                  status: evt.payload.success ? 'passed' : 'failed',
+                },
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('task_completed', (evt) => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                completedTasks: prev.completedTasks + 1,
+                filesModified: Array.from(
+                  new Set([...prev.filesModified, ...evt.payload.filesModified]),
+                ),
+              }
+            : null,
+        );
+      });
+
+      executor.getEventBus().on('task_failed', () => {
+        setExecutionState((prev) =>
+          prev
+            ? {
+                ...prev,
+                failedTasks: prev.failedTasks + 1,
+              }
+            : null,
+        );
+      });
+
+      const res = await executor.executePlan(planToRun, {
+        signal: abortControllerRef.current.signal,
+      });
+
+      setExecutionState((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: res.status,
+              durationMs: res.durationMs,
+              error: res.error,
+            }
+          : null,
+      );
+
+      const refreshed = context.planRepo.findById(planToRun.planId);
+      if (refreshed) setActivePlan(refreshed);
+
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `exec_done_${++msgCounterRef.current}`,
+          role: 'assistant',
+          content: `Execution of plan "${planToRun!.title}" ${res.status.toUpperCase()}.\nCompleted ${res.tasksCompleted}/${planToRun!.tasks.length} tasks in ${(res.durationMs / 1000).toFixed(1)}s.${res.error ? `\nError: ${res.error}` : ''}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${++msgCounterRef.current}`,
+          role: 'error',
+          content: `Plan execution failed: ${msg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
   const handleSlashCommand = async (cmdText: string) => {
     const parts = cmdText.trim().split(/\s+/);
     const cmd = parts[0]?.toLowerCase();
@@ -556,6 +771,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             content: [
               'Evolve CLI Commands:',
               '  /chat            - Return to active chat view',
+              '  /run [planId]    - Execute approved plan with verification and debugging',
               '  /plan [req]      - Generate repository-aware implementation plan (detailed)',
               '  /plan quick [r]  - Generate a concise implementation plan',
               '  /plan detailed   - Generate a comprehensive implementation plan',
@@ -672,6 +888,13 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       case '/chat':
         setScreen('chat');
         break;
+
+      case '/run':
+      case '/execute': {
+        const targetId = arg.trim() || undefined;
+        await handleRunPlan(targetId);
+        break;
+      }
 
       case '/plan': {
         const subArg = arg.trim();
@@ -968,6 +1191,23 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             />
           )}
 
+          {/* Active running plan execution */}
+          {executionState && (
+            <PlanExecutionCard
+              plan={executionState.plan}
+              status={executionState.status}
+              currentTaskIndex={executionState.currentTaskIndex}
+              currentTask={executionState.currentTask}
+              activeTool={executionState.activeTool}
+              activeStage={executionState.activeStage}
+              completedTasks={executionState.completedTasks}
+              failedTasks={executionState.failedTasks}
+              filesModified={executionState.filesModified}
+              durationMs={executionState.durationMs}
+              error={executionState.error}
+            />
+          )}
+
           {/* Primary Input Box */}
           {!pendingApproval && !showFeedback && (
             <InputBox
@@ -1025,6 +1265,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           onApprove={(pId) => handleApprovePlan(pId)}
           onReject={(pId) => handleRejectPlan(pId)}
           onRegenerate={(pId) => handleRegeneratePlan(pId)}
+          onRun={(pId) => handleRunPlan(pId)}
           onClose={() => setScreen('chat')}
         />
       )}

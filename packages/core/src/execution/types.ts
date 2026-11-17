@@ -8,7 +8,7 @@ export type VerificationStage = z.infer<typeof VerificationStageSchema>;
 
 export interface CommandRiskAnalysis {
   risk: CommandRiskLevel;
-  reason?: string;
+  reason?: string | undefined;
   destructive: boolean;
   requiresApproval: boolean;
 }
@@ -21,7 +21,7 @@ export interface VerificationResult {
   stdout: string;
   stderr: string;
   durationMs: number;
-  errorTrace?: string;
+  errorTrace?: string | undefined;
 }
 
 export interface TaskExecutionResult {
@@ -30,7 +30,7 @@ export interface TaskExecutionResult {
   durationMs: number;
   filesModified: string[];
   verifications: VerificationResult[];
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface PlanExecutionResult {
@@ -41,13 +41,13 @@ export interface PlanExecutionResult {
   tasksCompleted: number;
   tasksFailed: number;
   tasks: TaskExecutionResult[];
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface PlanExecutionOptions {
-  autoApprove?: boolean;
-  maxDebugAttempts?: number;
-  stopOnFailure?: boolean;
-  verifyAfterTask?: boolean;
-  customTestCommand?: string;
+  autoApprove?: boolean | undefined;
+  maxDebugAttempts?: number | undefined;
+  stopOnFailure?: boolean | undefined;
+  verifyAfterTask?: boolean | undefined;
+  customTestCommand?: string | undefined;
 }

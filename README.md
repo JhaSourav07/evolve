@@ -286,7 +286,9 @@ evolve status
 | `evolve chat [prompt]`          | Start interactive mode or execute a single task prompt              | `evolve chat "Fix failing tests"`                                       |
 | `evolve plan [request]`         | Generate repository-aware plan or inspect/approve/reject plans       | `evolve plan "Add JWT auth to express" --mode detailed`                 |
 | `evolve plan --history`         | List previous plans generated for the workspace                     | `evolve plan --history`                                                 |
-| `evolve plan --approve <id>`    | Approve plan for execution in Phase 3                               | `evolve plan --approve plan_abc123`                                     |
+| `evolve plan --approve <id>`    | Approve plan for execution                                          | `evolve plan --approve plan_abc123`                                     |
+| `evolve run [planId]`           | Execute an approved implementation plan with verification           | `evolve run --auto-approve`                                              |
+| `evolve run [planId] --headless`| Headless execution in terminal without interactive TUI              | `evolve run plan_abc123 --headless`                                     |
 | `evolve init`                   | Initialize `.evolve` directory, SQLite database, and default config | `evolve init`                                                           |
 | `evolve status`                 | Inspect project, git branch, active Ollama model, and storage state | `evolve status`                                                         |
 | `evolve history`                | List previous agent sessions in the current workspace               | `evolve history`                                                        |
@@ -305,6 +307,7 @@ Type these slash commands directly inside the chat prompt:
 | Slash Command                 | Description                                                        |
 | :---------------------------- | :----------------------------------------------------------------- |
 | `/help`                       | Display interactive command and shortcut reference                 |
+| `/run [planId]`               | Execute approved implementation plan with verification & debugging |
 | `/plan [objective]`           | Generate repository-aware implementation plan (detailed mode)      |
 | `/plan quick [objective]`     | Generate a concise, single-stage implementation plan                |
 | `/plan detailed [obj]`        | Generate a full multi-wave implementation plan with risk profile    |
@@ -341,7 +344,7 @@ Type these slash commands directly inside the chat prompt:
 
 ## Tool Suite & Security Sandboxing
 
-Evolve equips local LLMs with 15 native execution and repository intelligence tools:
+Evolve equips local LLMs with 22 native execution, repository intelligence, and safe Git tools:
 
 ### Repository Intelligence Tools
 1. **`inspect_project`**: Profile project root, detect frameworks, languages, package managers, and directories.
@@ -351,22 +354,53 @@ Evolve equips local LLMs with 15 native execution and repository intelligence to
 5. **`get_dependencies`**: Inspect imported external libraries, internal workspace modules, and reverse importers.
 6. **`get_related_files`**: Trace related files connected by import/export relationships and module boundaries.
 
-### Filesystem & Execution Tools
+### Filesystem & Exploration Tools
 7. **`read_file`**: Read file contents with optional line-range slicing (`startLine`, `endLine`).
 8. **`list_files`**: Browse directory hierarchies respecting `.gitignore` and exclusion policies.
 9. **`search_code`**: Fast text search across files accelerated by SQLite FTS5 index.
-10. **`write_file`**: Create new files or overwrite existing files. _(Requires user approval)_
-11. **`edit_file`**: Perform targeted, atomic string replacements with exact character matching. _(Requires user approval)_
-12. **`run_command`**: Execute bash/shell commands within the workspace with strict timeouts. _(Requires user approval)_
-13. **`run_tests`**: Execute testing frameworks (Vitest, Jest, Pytest) and parse structured pass/fail results. _(Requires user approval)_
-14. **`git_status`**: Inspect working tree branch, modified files, and staged changes.
-15. **`git_diff`**: View unified diffs across working copy or staged index.
+10. **`create_file`**: Atomically create new files; fails if file exists to prevent accidental overwrites. _(Requires approval)_
+11. **`write_file`**: Create new files or overwrite existing files. _(Requires approval)_
+12. **`edit_file`**: Perform targeted, atomic string replacements with exact character matching. _(Requires approval)_
+13. **`delete_file`**: Safely delete files or directories with path traversal checks. _(Requires approval)_
+14. **`get_file_diff`**: Generate unified diffs for individual files against HEAD or staged index.
 
-### Security Guarantees
+### Terminal & Execution Tools
+15. **`run_command`**: Execute bash/shell commands with risk classification, timeouts, and secret scrubbing. _(Requires approval)_
+16. **`run_tests`**: Execute testing frameworks (Vitest, Jest, Pytest) and parse structured results. _(Requires approval)_
+
+### Safe Git Workflow Tools
+17. **`git_status`**: Inspect working tree branch, modified files, and staged changes.
+18. **`git_diff`**: View unified diffs across working copy or staged index.
+19. **`git_log`**: Retrieve recent commit history with hashes, authors, and messages.
+20. **`git_branch`**: Safely list, create, or switch git branches.
+21. **`git_add`**: Stage files while blocking sensitive credential files (`.env`, keys).
+22. **`git_commit`**: Create conventional commits with staged checks and credential protection. _(Requires approval)_
+
+### Security Guarantees & Risk Classification
 
 - **Path Confinement**: All file operations resolve strictly inside the workspace root; path traversal attacks (`../../`) are blocked and rejected before execution.
-- **Human-in-the-Loop Gating**: Destructive actions (`write_file`, `edit_file`, `run_command`, `run_tests`) pause execution and require explicit user approval.
+- **Command Risk Classifier**: Terminal commands are classified into `BLOCKED` (fork bombs, `sudo`, `rm -rf /`, piping unvetted scripts to bash), `HIGH` (destructive deletions, force pushes, process killing), `MEDIUM` (package installation, branch switching), and `LOW` (tests, linter, status).
+- **Secret & Credential Scrubbing**: Output streams are filtered in real-time to redact AWS keys, GitHub tokens, GitLab tokens, Slack tokens, JWTs, and private keys.
+- **Human-in-the-Loop Gating**: Destructive actions (`write_file`, `create_file`, `edit_file`, `delete_file`, `run_command`, `git_commit`) pause execution and require explicit user approval.
 - **Abortable Execution**: Long-running commands and inference calls wire into Node.js `AbortController`, ensuring immediate, clean cancellation on `Ctrl+C`.
+
+---
+
+## Coding & Execution Engine (Phase 3)
+
+Evolve coordinates autonomous implementation of approved plans through a modular execution engine:
+
+- **Plan Execution Orchestrator**: Executes tasks following DAG topological dependency order, transitioning task states from `pending` → `ready` → `running` → `completed` / `failed` / `blocked`.
+- **Multi-Stage Verification Engine**: Automatically detects project tools and executes sequential quality verification stages:
+  1. `typecheck`: TypeScript (`tsc`), Rust (`cargo check`), or Python (`mypy`)
+  2. `lint`: ESLint, Ruff, or Clippy
+  3. `test`: Vitest, Jest, Pytest, or Cargo test
+  4. `build`: Build scripts or binary compilation
+- **Bounded Error Recovery & Iterative Debugging**:
+  - Automatically captures failing stack traces and diagnostic contexts.
+  - Executes a bounded repair loop (up to 3 iterations) to fix compilation or test failures.
+  - Employs deterministic SHA-256 snapshotting to detect and halt cyclic repository edits.
+- **Event Lifecycle**: Emits 11 typed lifecycle events (`execution_started`, `task_started`, `tool_call_requested`, `tool_execution_started`, `tool_execution_completed`, `tool_execution_failed`, `verification_started`, `verification_completed`, `task_completed`, `task_failed`, `execution_completed`).
 
 ---
 

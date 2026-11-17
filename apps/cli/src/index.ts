@@ -18,6 +18,7 @@ import { runIntegrationsCommand } from './commands/integrations.js';
 import { runMemoryCommand } from './commands/memory.js';
 import { runModelsCommand } from './commands/models.js';
 import { runPlanCommand } from './commands/plan.js';
+import { runExecuteCommand } from './commands/run.js';
 import { runStatusCommand } from './commands/status.js';
 
 export function formatCliBanner(): string {
@@ -85,6 +86,29 @@ export function buildCli(): Command {
         },
       ) => {
         await runPlanCommand(request, opts);
+      },
+    );
+
+  program
+    .command('run [planId]')
+    .description('Execute an approved implementation plan with verification and debugging')
+    .option('--auto-approve', 'Automatically approve all tool executions without interactive prompts')
+    .option('--no-verify', 'Skip post-task verification stages')
+    .option('--test-command <cmd>', 'Custom test runner command to execute during verification')
+    .option('--headless', 'Run directly in terminal without interactive Ink TUI')
+    .option('-m, --model <model>', 'Ollama model to use')
+    .action(
+      async (
+        planId?: string,
+        opts?: {
+          autoApprove?: boolean;
+          verify?: boolean;
+          testCommand?: string;
+          headless?: boolean;
+          model?: string;
+        },
+      ) => {
+        await runExecuteCommand(planId, opts);
       },
     );
 

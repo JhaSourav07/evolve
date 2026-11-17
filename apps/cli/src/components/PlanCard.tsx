@@ -9,6 +9,7 @@ export interface PlanCardProps {
   onReject?: ((planId: string) => void) | undefined;
   onRegenerate?: ((planId: string) => void) | undefined;
   onEditTask?: ((planId: string, taskId: string) => void) | undefined;
+  onRun?: ((planId: string) => void) | undefined;
   onClose?: (() => void) | undefined;
 }
 
@@ -18,6 +19,7 @@ export const PlanCard: React.FC<PlanCardProps> = ({
   onReject,
   onRegenerate,
   onEditTask,
+  onRun,
   onClose,
 }) => {
   const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
@@ -25,6 +27,11 @@ export const PlanCard: React.FC<PlanCardProps> = ({
   useInput((input, key) => {
     if (key.escape) {
       if (onClose) onClose();
+      return;
+    }
+
+    if (key.return && onRun && plan.status === 'approved') {
+      onRun(plan.planId);
       return;
     }
 
@@ -190,9 +197,15 @@ export const PlanCard: React.FC<PlanCardProps> = ({
         marginTop={1}
       >
         <Box gap={2}>
-          <Text color={Theme.colors.success} bold>
-            [A] Approve Plan
-          </Text>
+          {plan.status === 'approved' ? (
+            <Text color={Theme.colors.success} bold>
+              [Enter] Run Plan
+            </Text>
+          ) : (
+            <Text color={Theme.colors.success} bold>
+              [A] Approve Plan
+            </Text>
+          )}
           <Text color={Theme.colors.accent} bold>
             [R] Regenerate
           </Text>
