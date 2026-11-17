@@ -4,6 +4,7 @@ import { migration002 } from './002_feedback_and_memory.js';
 import { migration003 } from './003_repo_index.js';
 import { migration004 } from './004_plans.js';
 import { migration005 } from './005_persistent_memory.js';
+import { migration006 } from './006_evaluations_and_multi_level_feedback.js';
 
 export interface Migration {
   id: string;
@@ -16,6 +17,7 @@ export const ALL_MIGRATIONS: readonly Migration[] = [
   migration003,
   migration004,
   migration005,
+  migration006,
 ];
 
 /**

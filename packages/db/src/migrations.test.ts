@@ -10,6 +10,7 @@ describe('Migration System', () => {
     const firstRun = runMigrations(sqlite);
     expect(firstRun).toContain('001_initial_schema');
     expect(firstRun).toContain('005_persistent_memory');
+    expect(firstRun).toContain('006_evaluations_and_multi_level_feedback');
 
     // Verify tables exist
     const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
@@ -23,6 +24,7 @@ describe('Migration System', () => {
     expect(tableNames).toContain('events');
     expect(tableNames).toContain('tool_calls');
     expect(tableNames).toContain('feedback');
+    expect(tableNames).toContain('evaluations');
     expect(tableNames).toContain('knowledge');
     expect(tableNames).toContain('training_examples');
     expect(tableNames).toContain('model_versions');

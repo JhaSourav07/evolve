@@ -8,3 +8,4 @@ export * from './training_examples.js';
 export * from './model_versions.js';
 export * from './repo_index.js';
 export * from './plans.js';
+export * from './evaluations.js';
