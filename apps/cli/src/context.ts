@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import {
   AgentRuntime,
   createDefaultToolRegistry,
+  MemoryConsolidator,
+  MemoryExtractor,
+  MemoryRetriever,
   OllamaProvider,
   PlanExecutor,
 } from '@evolve/agent';
@@ -45,6 +48,9 @@ export class CliContext {
   public readonly eventService: EventService;
   public readonly feedbackService: FeedbackService;
   public readonly memoryService: MemoryService;
+  public readonly memoryRetriever: MemoryRetriever;
+  public readonly memoryConsolidator: MemoryConsolidator;
+  public readonly memoryExtractor: MemoryExtractor;
   public readonly consentManager: ConsentManager;
   public readonly terminalAdapter: TerminalAdapter;
   public readonly provider: OllamaProvider;
@@ -98,6 +104,9 @@ export class CliContext {
     this.eventService = new EventService(this.dbInstance.db);
     this.feedbackService = new FeedbackService(this.dbInstance.db);
     this.memoryService = new MemoryService(this.dbInstance.db, this.dbInstance.sqlite);
+    this.memoryRetriever = new MemoryRetriever({ memoryService: this.memoryService });
+    this.memoryConsolidator = new MemoryConsolidator(this.memoryService);
+    this.memoryExtractor = new MemoryExtractor(this.memoryConsolidator);
 
     // 5. Ensure Project row exists in DB
     this.projectId = `proj_${Buffer.from(this.rootDir).toString('hex').slice(-12)}`;
@@ -219,13 +228,14 @@ export class CliContext {
     const tools = createDefaultToolRegistry();
 
     // Retrieve memories for context
-    const recentMemories = this.memoryService.search('', {
+    const retrieval = this.memoryRetriever.retrieve({
+      prompt: '',
       projectId: this.projectId,
-      limit: 5,
+      maxTokens: 1000,
     });
 
     const memoryBullets: string[] = [];
-    for (const m of recentMemories) {
+    for (const m of retrieval.memories) {
       memoryBullets.push(`- [${m.category}] ${m.key}: ${m.content}`);
     }
 

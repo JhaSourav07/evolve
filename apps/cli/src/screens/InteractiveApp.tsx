@@ -280,6 +280,45 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       timestamp: Date.now(),
     };
     setStaticMessages((prev) => [...prev, userMsg]);
+
+    // Check if user is expressing an explicit preference or convention
+    const prefCandidate = context.memoryExtractor.extractFromUserInstruction(promptText, {
+      projectId: context.projectId,
+    });
+    if (prefCandidate) {
+      const saved = context.memoryConsolidator.consolidate(prefCandidate);
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `mem_pref_${++msgCounterRef.current}`,
+          role: 'system',
+          content: `✔ Learned user preference [${saved.key}]: "${saved.content}"`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+
+    // Retrieve relevant memories for the prompt
+    const retrieval = context.memoryRetriever.retrieve({
+      prompt: promptText,
+      projectId: context.projectId,
+      maxTokens: 1500,
+    });
+
+    if (retrieval.memories.length > 0) {
+      const topKeys = retrieval.memories.map((m) => m.key).slice(0, 3).join(', ');
+      const extraCount = retrieval.memories.length > 3 ? ` +${retrieval.memories.length - 3} more` : '';
+      setStaticMessages((prev) => [
+        ...prev,
+        {
+          id: `mem_inf_${++msgCounterRef.current}`,
+          role: 'system',
+          content: `⛁ Applied ${retrieval.memories.length} relevant memories (${topKeys}${extraCount})`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+
     setIsLoading(true);
     setScreen('chat');
 
@@ -344,6 +383,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       const result = await runtime.run(promptText, {
         signal: abortController.signal,
         sessionId,
+        memories: retrieval.memories,
         onChunk: ({ delta }) => {
           handleStreamChunk(delta);
         },
@@ -782,7 +822,17 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               '  /details         - Toggle thinking & tool output details (Shortcut: Ctrl+O)',
               '  /status          - Show system and project status dashboard',
               '  /history         - View previous sessions',
-              '  /memory          - View project conventions and stored experiences',
+              '  /memory          - View all persistent memories and experiences',
+              '  /memory search <q> - Search memories using SQLite FTS5',
+              '  /memory user     - View global user preferences',
+              '  /memory project  - View project architecture decisions and rules',
+              '  /memory experience - View verified debugging & task experiences',
+              '  /memory failed   - View failed approaches and postmortems',
+              '  /memory review   - Review proposed unverified memories',
+              '  /memory approve <id> - Approve a proposed memory',
+              '  /memory deprecate <id> - Deprecate an outdated memory',
+              '  /memory delete <id> - Delete an incorrect memory',
+              '  /memory add <cat> <k> <c> - Explicitly teach Evolve a preference or rule',
               '  /integrations    - View active integrations and consent governance',
               '  /models          - Discover and inspect local Ollama models',
               '  /feedback        - Rate the last agent interaction',
@@ -872,10 +922,228 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         setScreen('history');
         break;
 
-      case '/memory':
-        loadMemoryData();
-        setScreen('memory');
+      case '/memory': {
+        const subArg = arg.trim();
+        if (!subArg) {
+          loadMemoryData();
+          setScreen('memory');
+          break;
+        }
+
+        const [subCmd, ...restTokens] = subArg.split(/\s+/);
+        const subCmdLower = subCmd?.toLowerCase();
+        const remainder = restTokens.join(' ').trim();
+
+        if (subCmdLower === 'search') {
+          const searchRes = context.memoryRetriever.retrieve({
+            prompt: remainder,
+            projectId: context.projectId,
+            maxTokens: 3000,
+          });
+          setMemoriesList(
+            searchRes.memories.map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              supersededBy: m.supersededBy,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'user') {
+          const prefs = context.memoryService.listPreferences();
+          setMemoriesList(
+            prefs.map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'project') {
+          const rules = context.memoryService.listProjectRules(context.projectId);
+          const decs = context.memoryService.listDecisions(context.projectId);
+          setMemoriesList(
+            [...rules, ...decs].map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'experience') {
+          const exps = context.memoryService.listExperiences(context.projectId);
+          setMemoriesList(
+            exps.map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'failed') {
+          const failed = context.memoryService.listFailedAttempts(context.projectId);
+          setMemoriesList(
+            failed.map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'review' || subCmdLower === 'proposed') {
+          const proposed = context.memoryService.listProposed(context.projectId);
+          setMemoriesList(
+            proposed.map((m) => ({
+              id: m.id,
+              category: m.category,
+              key: m.key,
+              content: m.content,
+              confidence: m.confidence,
+              sourceType: m.sourceType,
+              verificationStatus: m.verificationStatus,
+              accessCount: m.accessCount,
+              projectId: m.projectId,
+            })),
+          );
+          setScreen('memory');
+        } else if (subCmdLower === 'approve' || subCmdLower === 'verify') {
+          if (remainder) {
+            context.memoryService.updateStatus(remainder, 'verified');
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_appr_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `✔ Approved memory ${remainder} as 'verified'`,
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /memory approve <memoryId>',
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        } else if (subCmdLower === 'deprecate') {
+          if (remainder) {
+            context.memoryService.deprecate(remainder);
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_depr_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `✔ Deprecated memory ${remainder}`,
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /memory deprecate <memoryId>',
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        } else if (subCmdLower === 'delete') {
+          if (remainder) {
+            context.memoryService.delete(remainder);
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_del_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `✔ Deleted memory ${remainder}`,
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /memory delete <memoryId>',
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        } else if (subCmdLower === 'add') {
+          const [cat, key, ...contentTokens] = restTokens;
+          const text = contentTokens.join(' ').trim();
+          if (cat && key && text) {
+            const saved = context.memoryConsolidator.consolidate({
+              category: cat as any,
+              key,
+              content: text,
+              projectId: cat === 'user_preference' ? undefined : context.projectId,
+              sourceType: 'explicit_user',
+              confidence: 1.0,
+              verificationStatus: 'verified',
+            });
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_add_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `✔ Added memory [${saved.category}] ${saved.key}: "${saved.content}"`,
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `mem_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /memory add <user_preference|project_rule|experience> <key> <content>',
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        } else {
+          loadMemoryData();
+          setScreen('memory');
+        }
         break;
+      }
 
       case '/integrations':
         setScreen('integrations');
@@ -1054,12 +1322,25 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   };
 
   const loadMemoryData = () => {
-    const memories = context.memoryService.search('', { projectId: context.projectId, limit: 50 });
-    const entries: MemoryEntry[] = memories.map((m) => ({
+    const raw = context.memoryService.listAll(context.projectId);
+    const globalPrefs = context.memoryService.listPreferences();
+    const combined = [...raw];
+    for (const p of globalPrefs) {
+      if (!combined.some((m) => m.id === p.id)) {
+        combined.unshift(p);
+      }
+    }
+    const entries: MemoryEntry[] = combined.map((m) => ({
       id: m.id,
       category: m.category,
       key: m.key,
       content: m.content,
+      confidence: m.confidence,
+      sourceType: m.sourceType,
+      verificationStatus: m.verificationStatus,
+      accessCount: m.accessCount,
+      supersededBy: m.supersededBy,
+      projectId: m.projectId,
     }));
     setMemoriesList(entries);
   };

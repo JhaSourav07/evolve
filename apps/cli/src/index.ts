@@ -135,18 +135,31 @@ export function buildCli(): Command {
     });
 
   program
-    .command('memory')
-    .description('Inspect or record project memories and conventions')
+    .command('memory [subcommand] [args...]')
+    .description('Inspect, search, review, or record persistent memories and experiences')
     .option('-a, --add', 'Add a memory entry')
     .option(
       '-c, --category <category>',
-      'Memory category: user_preference | project_rule | experience',
+      'Memory category: user_preference | project_rule | experience | architecture_decision | failed_attempt',
     )
     .option('-k, --key <key>', 'Memory key')
     .option('--content <content>', 'Memory content')
-    .action(async (opts: { add?: boolean; category?: string; key?: string; content?: string }) => {
-      await runMemoryCommand(opts);
-    });
+    .action(
+      async (
+        subcommand?: string,
+        args?: string[],
+        opts?: { add?: boolean; category?: string; key?: string; content?: string },
+      ) => {
+        await runMemoryCommand({
+          subcommand,
+          args,
+          add: opts?.add,
+          category: opts?.category,
+          key: opts?.key,
+          content: opts?.content,
+        });
+      },
+    );
 
   program
     .command('integrations')
