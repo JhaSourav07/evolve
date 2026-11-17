@@ -73,6 +73,7 @@ evolve
   - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Tool Suite & Security Sandboxing](#tool-suite--security-sandboxing)
 - [Memory & Reflexion Engine](#memory--reflexion-engine)
+- [Feedback & Evaluation Engine (Phase 5)](#feedback--evaluation-engine-phase-5)
 - [Interaction Integrations & Importers](#interaction-integrations--importers)
 - [Machine Learning & Fine-Tuning](#machine-learning--fine-tuning)
 - [Verification & Quality Assurance](#verification--quality-assurance)
@@ -479,6 +480,116 @@ evolve memory add <category> <key> <content>   # Explicitly teach Evolve
 
 # Interactive TUI Slash Commands
 /memory [search|user|project|experience|failed|review|approve|deprecate|delete|add]
+```
+
+---
+
+## Feedback & Evaluation Engine (Phase 5)
+
+Evolve implements a rigorous multi-level feedback and objective automated evaluation engine. Rather than relying on subjective LLM self-evaluations or assuming zero-exit-code commands imply working features, Evolve separates verifiable automated evidence from human developer feedback across three distinct abstraction levels:
+
+```mermaid
+flowchart TD
+    subgraph ExecutionEvidence ["Objective Execution Evidence"]
+        TESTS[Vitest / Pytest Test Results]
+        BUILD[Compiler / Build Output]
+        TYPECHECK[TypeScript / LSP Diagnostics]
+        LINT[Linter Errors & Warnings]
+        DIFF[Git Diff Analysis]
+        ERRS[Runtime Stack Traces & Exit Codes]
+    end
+
+    subgraph EvalEngine ["Evaluation & Classification Engine"]
+        DIM[Quality Evaluator - 8 Dimensions]
+        FAIL[Failure Classifier - 11 Root Causes]
+        STATUS{Overall Status}
+        TESTS & BUILD & TYPECHECK & LINT & DIFF & ERRS --> DIM
+        TESTS & BUILD & TYPECHECK & LINT & DIFF & ERRS --> FAIL
+        DIM & FAIL --> STATUS
+        STATUS -->|All Green| V[verified]
+        STATUS -->|Minor Warnings| VL[verified_with_limitations]
+        STATUS -->|Compilation/Test Error| F[failed]
+        STATUS -->|No Tests / Unverified| U[unverified]
+    end
+
+    subgraph MultiLevelFeedback ["Human Developer Feedback"]
+        R_FB[Response Feedback: Correct +1 / Partial 0 / Incorrect -1]
+        A_FB[Action Feedback: Tool Selection / Safety / Utility]
+        T_FB[Task Feedback: Reqs, Quality, Arch, Correctness, Completeness]
+    end
+
+    subgraph DownstreamIntegration ["Memory & Training Data Preparation"]
+        MEM[Phase 4 Experience Memory]
+        SFT[SFT Demonstrations: Verified + Clean]
+        DPO[DPO Contrast Pairs: Chosen vs Rejected]
+        V -->|Auto-Save Experience| MEM
+        F -->|Auto-Save Postmortem| MEM
+        STATUS & MultiLevelFeedback --> SFT
+        STATUS & MultiLevelFeedback --> DPO
+    end
+```
+
+### 1. Three Feedback Levels
+- **Response-Level Feedback**: Rates natural language assistant answers as `correct` (+1), `partially_correct` (0), or `incorrect` (-1), capturing written user corrections and explanations.
+- **Action-Level Feedback**: Rates individual tool invocations with granular taxonomy: `correct_tool_selection`, `incorrect_tool_selection`, `successful_action`, `failed_action`, `unnecessary_action`, or `unsafe_action`.
+- **Task-Level Feedback**: Multi-dimensional evaluation across 5 criteria ($1-5$ scale):
+  - **Requirement Satisfaction**: Did the output fulfill all functional requirements?
+  - **Code Quality**: Readability, maintainability, formatting, and naming consistency.
+  - **Architecture**: Consistency with existing abstractions and folder conventions.
+  - **Correctness**: Absence of regressions, logic bugs, or edge-case oversights.
+  - **Completeness**: Are edge cases, typings, and tests included?
+
+### 2. Eight Objective Quality Dimensions
+The `QualityEvaluator` deterministically inspects verification results and code changes across 8 core dimensions:
+1. `functional_correctness`: Validates automated unit and integration test suites.
+2. `requirement_coverage`: Cross-checks implementation against planned task requirements.
+3. `test_coverage_evidence`: Verifies that new or modified logic is backed by corresponding test cases.
+4. `code_maintainability`: Inspects lint status, naming conventions, and file modularity.
+5. `architectural_consistency`: Checks that imports and structure respect monorepo rules.
+6. `security_considerations`: Scans diff for secrets, hardcoded credentials, and path traversal vectors.
+7. `error_handling`: Verifies presence of error catching, status code handling, and cleanup logic.
+8. `regression_risk`: Assesses the scope and safety of touched files against untouched modules.
+
+### 3. Eleven Root-Cause Failure Categories
+When tasks fail or encounter issues, the `FailureClassifier` assigns precise root-cause tags with remediation suggestions:
+- `incorrect_implementation`: Logical errors in source code despite successful build.
+- `missing_requirement`: An objective specified in the plan was omitted from the diff.
+- `repository_misunderstanding`: Wrong conventions, outdated patterns, or duplicate implementations.
+- `incorrect_tool_selection`: Attempting to use the wrong tool for the task.
+- `command_execution_failure`: Non-zero exit code or terminal command crash.
+- `test_failure`: Test assertion failure or mock failure.
+- `build_failure`: TypeScript compiler, bundler, or build-step failure.
+- `context_retrieval_failure`: Essential files or symbols missing from context window.
+- `planning_failure`: Flawed DAG decomposition or incorrect dependencies.
+- `model_reasoning_failure`: Hallucinated methods or faulty algorithmic deductions.
+- `user_requirement_ambiguity`: Prompt was inherently ambiguous or missing critical specs.
+
+### 4. Training Data Preparation Interface (SFT & DPO)
+The `queryTrainingCandidates` engine separates verified engineering artifacts into high-confidence training corpuses for future model fine-tuning (Phase 6):
+- **SFT Demonstrations**: High-quality sessions with `overallStatus: 'verified'`, complete requirement coverage, green tests, and non-negative human ratings.
+- **DPO Contrast Pairs**:
+  - `dpo_chosen`: Verified, clean implementations or user-corrected accepted outputs.
+  - `dpo_rejected`: Unverified, failing, or user-criticized attempts paired with their corresponding chosen counterpart.
+- **Filtering Capabilities**: Query candidates by verification status, minimum human rating, quality dimension, failure category, or specific project.
+
+### 5. Evaluation & Feedback Commands
+```bash
+# Terminal CLI commands
+evolve evaluate                                      # List recent task evaluations
+evolve evaluate inspect <id>                         # Inspect full evaluation report card
+evolve evaluate task <taskId>                        # View evaluation for specific task
+evolve evaluate plan <planId>                        # View evaluations for an entire plan
+evolve evaluate training [--status] [--category]     # Query SFT and DPO training candidate pairs
+
+# Multi-level feedback CLI
+evolve feedback response <1|0|-1> [--notes]          # Rate last response
+evolve feedback action <toolCallId> <type> [--notes] # Rate tool invocation
+evolve feedback task <taskId> [--ratings 5,5,5,5,5]  # Multi-dimensional task rating
+evolve feedback list                                 # View feedback history
+
+# Interactive TUI Slash Commands
+/evaluate [inspect <id> | training | list]
+/feedback [action <toolCallId> <type> | task <taskId> <ratings> | history]
 ```
 
 ---
