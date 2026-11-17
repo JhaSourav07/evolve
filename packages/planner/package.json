@@ -21,7 +21,11 @@
     "@evolve/core": "workspace:*",
     "@evolve/db": "workspace:*",
     "@evolve/indexer": "workspace:*",
+    "better-sqlite3": "^13.2.0",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
   },
   "keywords": [
     "ai",

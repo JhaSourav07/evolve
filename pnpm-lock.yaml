@@ -137,6 +137,28 @@ importers:
 
   packages/ml: {}
 
+  packages/planner:
+    dependencies:
+      '@evolve/core':
+        specifier: workspace:*
+        version: link:../core
+      '@evolve/db':
+        specifier: workspace:*
+        version: link:../db
+      '@evolve/indexer':
+        specifier: workspace:*
+        version: link:../indexer
+      better-sqlite3:
+        specifier: ^13.2.0
+        version: 13.2.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^9.6.0
+        version: 9.6.0
+
 packages:
 
   '@alcalzone/ansi-tokenize@0.3.1':
