@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import { join } from 'node:path';
 import { AgentRuntime, createDefaultToolRegistry, OllamaProvider } from '@evolve/agent';
 import {
@@ -40,6 +41,7 @@ export class CliContext {
   public readonly terminalAdapter: TerminalAdapter;
   public readonly provider: OllamaProvider;
   public readonly projectId: string;
+  public readonly contextWindow: number;
 
   constructor(options: CliContextOptions = {}) {
     this.rootDir = options.rootDir ?? process.cwd();
@@ -112,16 +114,17 @@ export class CliContext {
 
     // 7. Ollama Model Provider (dynamic, unhardcoded model selection)
     const initialModel = options.modelName || selectedModel || this.config.model.model;
-    const defaultSafeContextWindow = 16_384;
-    const contextWindow =
+    const totalRamGb = os.totalmem() / (1024 * 1024 * 1024);
+    const defaultSafeContextWindow = totalRamGb < 20 ? 8_192 : 16_384;
+    this.contextWindow =
       typeof fileModelConfig.contextWindow === 'number'
         ? (fileModelConfig.contextWindow as number)
-        : (this.config.model.contextWindow ?? defaultSafeContextWindow);
+        : defaultSafeContextWindow;
 
     this.provider = new OllamaProvider({
       model: initialModel,
       baseUrl: this.config.model.baseUrl,
-      contextWindow,
+      contextWindow: this.contextWindow,
       timeoutMs: 120_000,
     });
   }
@@ -218,9 +221,7 @@ export class CliContext {
       config: {
         workspaceRoot: this.rootDir,
         maxSteps: this.config.maxStepsPerSession,
-        maxContextTokens: this.config.model.contextWindow
-          ? Math.floor(this.config.model.contextWindow * 0.75)
-          : 24_576,
+        maxContextTokens: Math.floor(this.contextWindow * 0.75),
         temperature: this.config.model.temperature,
         systemPrompt,
         requestApproval: approvalHandler,
