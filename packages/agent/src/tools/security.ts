@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertPathInsideWorkspace, SecurityError, type ToolExecutionContext } from '@evolve/core';
+import {
+  assertPathInsideWorkspace,
+  type CommandRiskAnalysis,
+  SecurityError,
+  type ToolExecutionContext,
+} from '@evolve/core';
 
 /**
  * Patterns matching sensitive configuration, credential, and secret files.
@@ -109,4 +114,144 @@ export async function checkApproval(
       reason: `Approval check error: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
+
+/**
+ * Known secret and token patterns for output redaction.
+ */
+const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+  // AWS access key IDs
+  {
+    pattern: /\b(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b/g,
+    replacement: '[REDACTED_AWS_KEY]',
+  },
+  // GitHub Personal Access Tokens and OAuth tokens
+  {
+    pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,255}\b/g,
+    replacement: '[REDACTED_GITHUB_TOKEN]',
+  },
+  // GitLab Personal Access Tokens
+  {
+    pattern: /\bglpat-[0-9a-zA-Z_-]{20,}\b/g,
+    replacement: '[REDACTED_GITLAB_TOKEN]',
+  },
+  // Slack Tokens
+  {
+    pattern: /\bxox[baprs]-[0-9a-zA-Z-]{10,}\b/g,
+    replacement: '[REDACTED_SLACK_TOKEN]',
+  },
+  // Standard JSON Web Tokens (JWT)
+  {
+    pattern: /\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\b/g,
+    replacement: '[REDACTED_JWT]',
+  },
+  // OpenAI / Anthropic API keys
+  {
+    pattern: /\bsk-(?:live-|test-|ant-)?[A-Za-z0-9_-]{20,}\b/g,
+    replacement: '[REDACTED_API_KEY]',
+  },
+  // Private Key Blocks
+  {
+    pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+    replacement: '[REDACTED_PRIVATE_KEY]',
+  },
+  // Common key-value assignments containing secrets (e.g. password=..., api_key="...")
+  {
+    pattern: /(?<=\b(?:password|passwd|api_key|apikey|secret|auth_token|access_token|private_key)\s*[:=]\s*["']?)[^"'\s\n]{8,}(?=["']?)/gi,
+    replacement: '[REDACTED_SECRET]',
+  },
+];
+
+/**
+ * Scrubs known secret and credential patterns from text outputs.
+ */
+export function scrubSecrets(text: string): string {
+  if (!text) return text;
+  let result = text;
+  for (const { pattern, replacement } of SECRET_PATTERNS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+/**
+ * Classifies command risk into BLOCKED, HIGH, MEDIUM, or LOW.
+ */
+export function classifyCommandRisk(command: string): CommandRiskAnalysis {
+  const trimmed = command.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. BLOCKED commands (Unacceptable security risks)
+  const blockedPatterns: Array<{ regex: RegExp; reason: string }> = [
+    { regex: /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, reason: 'Fork bomb detected' },
+    { regex: /\b(?:sudo|doas|su)\b/, reason: 'Privilege escalation commands are forbidden' },
+    { regex: /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?(-[a-zA-Z]*r[a-zA-Z]*\s+)?(\/|~\/?|\/\*)$/, reason: 'Root or home directory destruction detected' },
+    { regex: /\brm\s+-[a-zA-Z]*rf\s+(\/|~\/?|\/\*)$/, reason: 'Root or home directory destruction detected' },
+    { regex: /\b(?:shutdown|reboot|poweroff|halt|init\s+[06])\b/, reason: 'System shutdown or reboot commands are forbidden' },
+    { regex: /\b(?:mkfs(\.[a-z0-9]+)?|fdisk|parted)\b/, reason: 'Disk formatting or partitioning commands are forbidden' },
+    { regex: />\s*\/dev\/(?:sd[a-z]|nvme[0-9]|hd[a-z])/, reason: 'Direct device write detected' },
+    { regex: /\bdd\s+if=.*of=\/dev\//, reason: 'Raw device overwrite detected' },
+    { regex: /(?:curl|wget)\s+[^|]+\|\s*(?:ba)?sh\b/, reason: 'Piping remote scripts directly to shell is forbidden' },
+  ];
+
+  for (const { regex, reason } of blockedPatterns) {
+    if (regex.test(trimmed) || regex.test(lower)) {
+      return {
+        risk: 'blocked',
+        reason,
+        destructive: true,
+        requiresApproval: true,
+      };
+    }
+  }
+
+  // 2. HIGH risk commands (Destructive, requiring human approval)
+  const highRiskPatterns: Array<{ regex: RegExp; reason: string }> = [
+    { regex: /\brm\s+-[a-zA-Z]*[rf]/, reason: 'Recursive file deletion' },
+    { regex: /\brimraf\b/, reason: 'Recursive directory deletion' },
+    { regex: /\bgit\s+reset\s+--hard\b/, reason: 'Hard git reset will discard uncommitted changes' },
+    { regex: /\bgit\s+clean\s+-[a-zA-Z]*f\b/, reason: 'Force git clean will delete untracked files' },
+    { regex: /\bgit\s+push\s+.*--force\b|\bgit\s+push\s+.*-f\b/, reason: 'Force push can overwrite remote history' },
+    { regex: /\bgit\s+branch\s+-[a-zA-Z]*D\b/, reason: 'Forced branch deletion' },
+    { regex: /\bkill\s+-9\b|\bpkill\b|\bkillall\b/, reason: 'Force process termination' },
+    { regex: /\b(?:dropdb|drop\s+database|prisma\s+migrate\s+reset)\b/, reason: 'Database drop or reset' },
+    { regex: /\b(?:npm|pnpm|yarn)\s+publish\b/, reason: 'Package publishing operation' },
+  ];
+
+  for (const { regex, reason } of highRiskPatterns) {
+    if (regex.test(trimmed) || regex.test(lower)) {
+      return {
+        risk: 'high',
+        reason,
+        destructive: true,
+        requiresApproval: true,
+      };
+    }
+  }
+
+  // 3. MEDIUM risk commands (Modifying workspace dependencies, git refs, or files)
+  const mediumRiskPatterns = [
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|remove|update)\b/,
+    /\b(?:pip|pip3|poetry)\s+(?:install|add|remove)\b/,
+    /\bcargo\s+(?:add|install|remove)\b/,
+    /\bgit\s+(?:checkout|switch|merge|rebase|stash|pull)\b/,
+    /\b(?:mkdir|touch|cp|mv|chmod|chown)\b/,
+  ];
+
+  for (const regex of mediumRiskPatterns) {
+    if (regex.test(trimmed) || regex.test(lower)) {
+      return {
+        risk: 'medium',
+        destructive: false,
+        requiresApproval: false,
+      };
+    }
+  }
+
+  // 4. LOW risk commands (Safe inspection, testing, building)
+  return {
+    risk: 'low',
+    destructive: false,
+    requiresApproval: false,
+  };
 }

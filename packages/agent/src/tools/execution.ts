@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentTool } from '@evolve/core';
 import { z } from 'zod';
-import { assertSafePath, checkApproval } from './security.js';
+import { assertSafePath, checkApproval, classifyCommandRisk, scrubSecrets } from './security.js';
 
 export interface ExecProcessOptions {
   command: string;
@@ -174,10 +174,20 @@ export const runCommandTool: AgentTool<
     try {
       const workingDir = cwd ? assertSafePath(cwd, context.workspaceRoot) : context.workspaceRoot;
 
+      // Classify command risk before executing
+      const riskAnalysis = classifyCommandRisk(command);
+      if (riskAnalysis.risk === 'blocked') {
+        return {
+          success: false,
+          output: `Command blocked by security policy: ${riskAnalysis.reason ?? 'Forbidden system command'}`,
+          error: 'COMMAND_BLOCKED',
+        };
+      }
+
       const approval = await checkApproval(
         'run_command',
         `Execute shell command: '${command}'`,
-        { command, cwd: workingDir },
+        { command, cwd: workingDir, riskLevel: riskAnalysis.risk },
         context,
       );
 
@@ -196,6 +206,10 @@ export const runCommandTool: AgentTool<
         maxOutputBytes,
         signal: context.signal,
       });
+
+      // Scrub credentials and tokens from output
+      res.stdout = scrubSecrets(res.stdout);
+      res.stderr = scrubSecrets(res.stderr);
 
       const outputLines: string[] = [];
       if (res.stdout.trim().length > 0) {
@@ -216,7 +230,10 @@ export const runCommandTool: AgentTool<
       return {
         success: res.exitCode === 0,
         output: combinedOutput,
-        data: res,
+        data: {
+          ...res,
+          riskLevel: riskAnalysis.risk,
+        },
         ...(res.exitCode !== 0 ? { error: `Exit code ${res.exitCode}` } : {}),
       };
     } catch (err) {
