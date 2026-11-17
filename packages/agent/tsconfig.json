@@ -8,7 +8,8 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/db" },
-    { "path": "../../packages/indexer" }
+    { "path": "../../packages/indexer" },
+    { "path": "../../packages/planner" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]

@@ -1,5 +1,5 @@
-import { desc, eq } from 'drizzle-orm';
-import type { Plan, PlanStatus, PlanTask } from '@evolve/core';
+import { and, desc, eq } from 'drizzle-orm';
+import type { Plan, PlanStatus, PlanTask, TaskStatus } from '@evolve/core';
 import type { EvolveDatabase } from '../connection.js';
 import {
   plans,
@@ -105,6 +105,17 @@ export class PlanRepository {
         updatedAt: Date.now(),
       })
       .where(eq(plans.id, id))
+      .run();
+  }
+
+  public updateTaskStatus(planId: string, taskId: string, status: TaskStatus): void {
+    this.db
+      .update(planTasks)
+      .set({
+        status,
+        updatedAt: Date.now(),
+      })
+      .where(and(eq(planTasks.planId, planId), eq(planTasks.id, taskId)))
       .run();
   }
 
