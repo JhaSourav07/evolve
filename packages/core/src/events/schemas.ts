@@ -235,6 +235,39 @@ export const MemoryDeletedPayloadSchema = z.object({
   key: z.string().optional(),
 });
 
+export const EvaluationCreatedPayloadSchema = z.object({
+  evaluationId: z.string().min(1),
+  projectId: z.string().min(1),
+  sessionId: z.string().min(1),
+  planId: z.string().optional(),
+  taskId: z.string().optional(),
+  overallStatus: z.string().min(1),
+});
+
+export const EvaluationCompletedPayloadSchema = z.object({
+  evaluationId: z.string().min(1),
+  projectId: z.string().min(1),
+  sessionId: z.string().min(1),
+  overallStatus: z.string().min(1),
+  trainingEligible: z.boolean(),
+});
+
+export const ActionFeedbackReceivedPayloadSchema = z.object({
+  feedbackId: z.string().min(1),
+  sessionId: z.string().min(1),
+  toolCallId: z.string().min(1),
+  actionRating: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+export const TaskFeedbackReceivedPayloadSchema = z.object({
+  feedbackId: z.string().min(1),
+  sessionId: z.string().min(1),
+  taskId: z.string().min(1),
+  overallRating: z.number().int(),
+  notes: z.string().optional(),
+});
+
 export const EventSchemas = {
   user_prompt: UserPromptPayloadSchema,
   assistant_response: AssistantResponsePayloadSchema,
@@ -269,6 +302,10 @@ export const EventSchemas = {
   memory_retrieved: MemoryRetrievedPayloadSchema,
   memory_deprecated: MemoryDeprecatedPayloadSchema,
   memory_deleted: MemoryDeletedPayloadSchema,
+  evaluation_created: EvaluationCreatedPayloadSchema,
+  evaluation_completed: EvaluationCompletedPayloadSchema,
+  action_feedback_received: ActionFeedbackReceivedPayloadSchema,
+  task_feedback_received: TaskFeedbackReceivedPayloadSchema,
 } as const;
 
 export type CoreEventType = keyof typeof EventSchemas;
