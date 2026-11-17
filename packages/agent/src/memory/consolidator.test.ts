@@ -141,3 +141,4 @@ describe('MemoryConsolidator - Quality & Conflict Resolution', () => {
     expect(mem.content).not.toContain('sk-1234567890abcdef');
   });
 });
+

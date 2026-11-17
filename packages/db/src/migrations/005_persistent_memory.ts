@@ -19,3 +19,4 @@ export const migration005: Migration = {
     CREATE INDEX IF NOT EXISTS idx_knowledge_superseded_by ON knowledge(superseded_by);
   `,
 };
+
