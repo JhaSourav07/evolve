@@ -19,9 +19,10 @@ import {
   type VerificationResult,
 } from '@evolve/core';
 import type { EvolveDatabaseInstance } from '@evolve/db';
-import { PlanRepository } from '@evolve/db';
+import { MemoryService, PlanRepository } from '@evolve/db';
 import { DirectedAcyclicGraph } from '@evolve/planner';
 import { DebuggingEngine } from '../debugging/engine.js';
+import { MemoryConsolidator, MemoryExtractor, MemoryRetriever } from '../memory/index.js';
 import { AgentRuntime } from '../runtime/agent.js';
 import type { AgentEventSink, AgentRunOptions } from '../runtime/types.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -34,6 +35,7 @@ export interface PlanExecutorOptions {
   verificationEngine?: VerificationEngine | undefined;
   debuggingEngine?: DebuggingEngine | undefined;
   database?: EvolveDatabaseInstance | undefined;
+  memoryService?: MemoryService | undefined;
   eventSink?: AgentEventSink | undefined;
   logger?: Logger | undefined;
   maxDebugAttempts?: number | undefined;
@@ -52,6 +54,10 @@ export class PlanExecutor {
   private readonly debuggingEngine: DebuggingEngine;
   private readonly database?: EvolveDatabaseInstance | undefined;
   private readonly planRepo?: PlanRepository | undefined;
+  private readonly memoryService?: MemoryService | undefined;
+  private readonly memoryRetriever?: MemoryRetriever | undefined;
+  private readonly memoryConsolidator?: MemoryConsolidator | undefined;
+  private readonly memoryExtractor?: MemoryExtractor | undefined;
   private readonly eventSink?: AgentEventSink | undefined;
   private readonly logger: Logger;
   private readonly internalBus: InMemoryEventBus;
@@ -73,6 +79,18 @@ export class PlanExecutor {
     this.database = options.database;
     if (this.database?.db) {
       this.planRepo = new PlanRepository(this.database.db);
+    }
+
+    this.memoryService =
+      options.memoryService ??
+      (options.database?.sqlite
+        ? new MemoryService(options.database.db, options.database.sqlite)
+        : undefined);
+
+    if (this.memoryService) {
+      this.memoryRetriever = new MemoryRetriever({ memoryService: this.memoryService });
+      this.memoryConsolidator = new MemoryConsolidator(this.memoryService);
+      this.memoryExtractor = new MemoryExtractor(this.memoryConsolidator);
     }
 
     this.eventSink = options.eventSink;
@@ -302,7 +320,7 @@ export class PlanExecutor {
       tasksFailed: failedTaskIds.size,
     });
 
-    return {
+    const planResult: PlanExecutionResult = {
       planId: plan.planId,
       sessionId,
       status: finalStatus,
@@ -312,6 +330,32 @@ export class PlanExecutor {
       tasks: taskResults,
       ...(!overallSuccess ? { error: `Execution finished with ${failedTaskIds.size} failed task(s).` } : {}),
     };
+
+    if (this.memoryExtractor) {
+      try {
+        const candidates = this.memoryExtractor.extractFromExecution(plan, planResult, {
+          projectId: plan.projectId,
+          sessionId,
+        });
+        if (candidates.length > 0) {
+          const saved = this.memoryExtractor.consolidateAll(candidates);
+          for (const mem of saved) {
+            this.emitEvent(sessionId, 'memory_created', {
+              memoryId: mem.id,
+              category: mem.category,
+              key: mem.key,
+              projectId: mem.projectId ?? undefined,
+              confidence: mem.confidence,
+              status: mem.verificationStatus,
+            });
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to extract execution memories: ${String(err)}`);
+      }
+    }
+
+    return planResult;
   }
 
   private async executeSingleTask(
@@ -326,6 +370,13 @@ export class PlanExecutor {
 
     // Construct runtime prompt
     const prompt = this.formatTaskPrompt(task);
+
+    // Retrieve relevant memories
+    const memoryResult = this.memoryRetriever?.retrieve({
+      prompt,
+      projectId: plan.projectId,
+      relevantFiles: task.relevantFiles,
+    });
 
     // Initialize agent runtime for this task
     const runtime = new AgentRuntime({
@@ -395,6 +446,7 @@ export class PlanExecutor {
     const runOpts: AgentRunOptions = {
       sessionId,
       signal: options.signal,
+      memories: memoryResult?.memories,
     };
 
     const runRes = await runtime.run(prompt, runOpts);

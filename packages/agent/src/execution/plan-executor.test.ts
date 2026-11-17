@@ -248,5 +248,55 @@ describe('PlanExecutor', () => {
     expect(result.status).toBe('cancelled');
     expect(result.tasksCompleted).toBe(0);
   });
+
+  it('extracts and records persistent memory when plan execution completes with database', async () => {
+    const { initDatabase, ProjectRepository, MemoryService, resetTestDatabase } = await import('@evolve/db');
+    const { db, sqlite, close } = initDatabase({ path: path.join(tmpDir, 'test.db') });
+    resetTestDatabase(sqlite);
+
+    const projectRepo = new ProjectRepository(db);
+    projectRepo.create({
+      id: 'proj_plan_mem',
+      name: 'Plan Memory Project',
+      path: tmpDir,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const memoryService = new MemoryService(db, sqlite);
+    const mockProvider = new MockModelProvider();
+    mockProvider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Database schema created successfully.' },
+    });
+    mockProvider.enqueueResponse({
+      finishReason: 'stop',
+      message: { role: 'assistant', content: 'Auth service implemented.' },
+    });
+
+    const executor = new PlanExecutor({
+      provider: mockProvider,
+      workspaceRoot: tmpDir,
+      memoryService,
+    });
+
+    const emittedEvents: string[] = [];
+    executor.getEventBus().onAny((evt) => {
+      emittedEvents.push(evt.type);
+    });
+
+    const plan = createTestPlan({ projectId: 'proj_plan_mem' });
+    const result = await executor.executePlan(plan);
+
+    expect(result.status).toBe('completed');
+    expect(result.tasksCompleted).toBe(2);
+
+    // Verify memories were saved and emitted
+    expect(emittedEvents).toContain('memory_created');
+    const experiences = memoryService.listExperiences('proj_plan_mem');
+    expect(experiences.length).toBeGreaterThanOrEqual(1);
+
+    close();
+  });
 });
 
