@@ -129,5 +129,58 @@ describe('MemoryService & SQLite FTS5 Keyword Retrieval', () => {
       service.delete(item.id);
       expect(service.search('temporary').length).toBe(0);
     });
+
+    it('tracks provenance, verification status, and evidence', () => {
+      const mem = service.saveMemory('architecture_decision', 'arch.state_mgmt', 'Use Zustand for UI state', {
+        projectId: 'proj_evolve',
+        sourceType: 'verified_execution',
+        sourceSessionId: 'sess_123',
+        verificationStatus: 'verified',
+        evidence: { verifiedByTest: true, testSuite: 'ui.test.ts' },
+      });
+
+      expect(mem.sourceType).toBe('verified_execution');
+      expect(mem.sourceSessionId).toBe('sess_123');
+      expect(mem.verificationStatus).toBe('verified');
+      expect(mem.evidenceJson).toContain('verifiedByTest');
+
+      const found = service.findById(mem.id);
+      expect(found?.verificationStatus).toBe('verified');
+    });
+
+    it('handles deprecation and excludes deprecated from default search', () => {
+      const oldMem = service.savePreference('style.linter', 'Use ESLint v8');
+      service.deprecate(oldMem.id, 'mem_new_linter');
+
+      const activeSearchResults = service.search('ESLint');
+      expect(activeSearchResults.length).toBe(0);
+
+      const allSearchResults = service.search('ESLint', { includeDeprecated: true });
+      expect(allSearchResults.length).toBe(1);
+      expect(allSearchResults[0]?.supersededBy).toBe('mem_new_linter');
+    });
+
+    it('increments access count and tracks lastAccessedAt', () => {
+      const mem = service.savePreference('perf.cache', 'Cache AST nodes in memory');
+      expect(mem.accessCount).toBe(0);
+
+      service.recordAccess(mem.id);
+      const updated = service.findById(mem.id);
+      expect(updated?.accessCount).toBe(1);
+      expect(updated?.lastAccessedAt).toBeGreaterThan(0);
+    });
+
+    it('stores and lists architecture decisions and failed attempts', () => {
+      service.saveArchitectureDecision('proj_evolve', 'dec.auth', 'Use Argon2 for password hashing');
+      service.saveFailedAttempt('proj_evolve', 'failed.crypto_subtle', 'SubtleCrypto is not synchronous');
+
+      const decisions = service.listDecisions('proj_evolve');
+      expect(decisions.length).toBe(1);
+      expect(decisions[0]?.key).toBe('dec.auth');
+
+      const failed = service.listFailedAttempts('proj_evolve');
+      expect(failed.length).toBe(1);
+      expect(failed[0]?.key).toBe('failed.crypto_subtle');
+    });
   });
 });

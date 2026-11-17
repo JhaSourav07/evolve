@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { EvolveDatabase } from '../connection.js';
 import { knowledge, type KnowledgeRecord, type NewKnowledgeRecord } from '../schema/index.js';
 
@@ -13,6 +13,13 @@ export class KnowledgeRepository {
         .set({
           content: data.content,
           confidence: data.confidence ?? existing.confidence,
+          tags: data.tags !== undefined ? data.tags : existing.tags,
+          sourceSessionId: data.sourceSessionId ?? existing.sourceSessionId,
+          sourceEventId: data.sourceEventId ?? existing.sourceEventId,
+          sourceType: data.sourceType ?? existing.sourceType,
+          verificationStatus: data.verificationStatus ?? existing.verificationStatus,
+          evidenceJson: data.evidenceJson ?? existing.evidenceJson,
+          supersededBy: data.supersededBy ?? existing.supersededBy,
           updatedAt: Date.now(),
         })
         .where(eq(knowledge.id, existing.id))
@@ -78,5 +85,50 @@ export class KnowledgeRepository {
       .where(eq(knowledge.category, category))
       .orderBy(desc(knowledge.confidence))
       .all();
+  }
+
+  public listByStatus(status: string, projectId?: string): KnowledgeRecord[] {
+    if (projectId) {
+      return this.db
+        .select()
+        .from(knowledge)
+        .where(and(eq(knowledge.verificationStatus, status), eq(knowledge.projectId, projectId)))
+        .orderBy(desc(knowledge.updatedAt))
+        .all();
+    }
+    return this.db
+      .select()
+      .from(knowledge)
+      .where(eq(knowledge.verificationStatus, status))
+      .orderBy(desc(knowledge.updatedAt))
+      .all();
+  }
+
+  public listProposed(projectId?: string): KnowledgeRecord[] {
+    return this.listByStatus('proposed', projectId);
+  }
+
+  public updateStatus(id: string, status: string, supersededBy?: string): KnowledgeRecord | undefined {
+    return this.db
+      .update(knowledge)
+      .set({
+        verificationStatus: status,
+        ...(supersededBy ? { supersededBy } : {}),
+        updatedAt: Date.now(),
+      })
+      .where(eq(knowledge.id, id))
+      .returning()
+      .get();
+  }
+
+  public incrementAccessCount(id: string): void {
+    this.db
+      .update(knowledge)
+      .set({
+        accessCount: sql`${knowledge.accessCount} + 1`,
+        lastAccessedAt: Date.now(),
+      })
+      .where(eq(knowledge.id, id))
+      .run();
   }
 }

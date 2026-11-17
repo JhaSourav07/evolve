@@ -9,6 +9,7 @@ describe('Migration System', () => {
     // First run: should apply migration 001
     const firstRun = runMigrations(sqlite);
     expect(firstRun).toContain('001_initial_schema');
+    expect(firstRun).toContain('005_persistent_memory');
 
     // Verify tables exist
     const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
