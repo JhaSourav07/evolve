@@ -238,4 +238,107 @@ describe('Evaluation & Multi-Level Feedback Service', () => {
     expect(dpoRejected).toBeDefined();
     expect(dpoRejected?.isSuccessful).toBe(false);
   });
+
+  it('filters training candidates by verificationStatus, failureCategory, and minRating', () => {
+    // 1. Verified task
+    service.recordEvaluation({
+      id: 'eval_filter_v',
+      projectId,
+      sessionId,
+      taskId: 'task_v',
+      taskTitle: 'Verified Task',
+      overallStatus: 'verified',
+      requirementCoverage: 'complete',
+      testStatus: 'passed',
+      buildStatus: 'passed',
+      typecheckStatus: 'passed',
+      lintStatus: 'passed',
+      gitDiffStatus: 'reviewed',
+      dimensions: [
+        {
+          dimension: 'functional_correctness',
+          result: 'positive',
+          supportingEvidence: 'All tests green',
+          confidence: 1.0,
+          source: 'automated_verification',
+        },
+      ],
+      failures: [],
+      evidenceSummary: {},
+      markdownReport: 'Verified',
+      userFeedbackStatus: 'pending',
+      trainingEligible: true,
+      createdAt: Date.now(),
+    });
+
+    // 2. Failed task with build_failure
+    service.recordEvaluation({
+      id: 'eval_filter_f',
+      projectId,
+      sessionId,
+      taskId: 'task_f',
+      taskTitle: 'Build Failure Task',
+      overallStatus: 'failed',
+      requirementCoverage: 'missing',
+      testStatus: 'none',
+      buildStatus: 'failed',
+      typecheckStatus: 'failed',
+      lintStatus: 'none',
+      gitDiffStatus: 'reviewed',
+      dimensions: [],
+      failures: [
+        {
+          category: 'build_failure',
+          explanation: 'Syntax error in index.ts',
+        },
+      ],
+      evidenceSummary: {},
+      markdownReport: 'Failed',
+      userFeedbackStatus: 'pending',
+      trainingEligible: false,
+      createdAt: Date.now() + 10,
+    });
+
+    // Record human feedback for task_f
+    service.recordTaskFeedback({
+      sessionId,
+      taskId: 'task_f',
+      ratings: {
+        requirementSatisfaction: 1,
+        codeQuality: 1,
+        architecture: 1,
+        correctness: 1,
+        completeness: 1,
+        overallRating: 1,
+      },
+      notes: 'Broken build',
+    });
+
+    // Filter by verificationStatus: 'verified'
+    const verifiedOnly = service.queryTrainingCandidates({
+      projectId,
+      verificationStatus: 'verified',
+    });
+    expect(verifiedOnly.length).toBe(1);
+    expect(verifiedOnly[0]?.evaluationId).toBe('eval_filter_v');
+
+    // Filter by failureCategories: ['build_failure']
+    const buildFailures = service.queryTrainingCandidates({
+      projectId,
+      failureCategories: ['build_failure'],
+    });
+    expect(buildFailures.length).toBe(1);
+    expect(buildFailures[0]?.evaluationId).toBe('eval_filter_f');
+
+    // Filter by minRating: 1 (should exclude task_f with rating -1)
+    const positiveOnly = service.queryTrainingCandidates({
+      projectId,
+      minRating: 1,
+    });
+    expect(positiveOnly.some((c) => c.evaluationId === 'eval_filter_f')).toBe(false);
+
+    // Query without projectId (listAll)
+    const allCandidates = service.queryTrainingCandidates();
+    expect(allCandidates.length).toBeGreaterThanOrEqual(2);
+  });
 });

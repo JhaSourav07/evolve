@@ -63,6 +63,15 @@ export class EvaluationRepository {
       .all();
   }
 
+  public listAll(limit: number = 50): EvaluationRecord[] {
+    return this.db
+      .select()
+      .from(evaluations)
+      .orderBy(desc(evaluations.createdAt))
+      .limit(limit)
+      .all();
+  }
+
   public listBySession(sessionId: string): EvaluationRecord[] {
     return this.db
       .select()

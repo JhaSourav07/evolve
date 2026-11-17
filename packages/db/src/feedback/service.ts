@@ -377,7 +377,9 @@ export class FeedbackService {
    * Filters and retrieves candidate training items for SFT and DPO training data preparation.
    */
   public queryTrainingCandidates(filter?: TrainingDataFilter): EligibleTrainingItem[] {
-    const evals = this.evaluationRepo.listByProject(filter?.projectId ?? '', filter?.limit ?? 100);
+    const evals = filter?.projectId
+      ? this.evaluationRepo.listByProject(filter.projectId, filter?.limit ?? 100)
+      : this.evaluationRepo.listAll(filter?.limit ?? 100);
     const items: EligibleTrainingItem[] = [];
 
     for (const ev of evals) {
