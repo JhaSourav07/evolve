@@ -6,3 +6,4 @@ export * from './feedback.js';
 export * from './knowledge.js';
 export * from './training.js';
 export * from './model_version.js';
+export * from './plan.js';
