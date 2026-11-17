@@ -404,24 +404,82 @@ Evolve coordinates autonomous implementation of approved plans through a modular
 
 ---
 
-## Memory & Reflexion Engine
+## Persistent Memory & Experience Engine (Phase 4)
 
-Evolve implements a dual-memory architecture to prevent repeated mistakes:
+Evolve implements a continuous learning memory architecture that preserves verified engineering lessons, project architecture decisions, and long-term user preferences across development sessions and repositories:
 
 ```mermaid
-graph LR
-    A[Interaction Complete] --> B{Outcome Assessment}
-    B -->|Success| C[Store Project Memory / Experience]
-    B -->|Failure / Rejection| D[Reflexion Engine]
-    D --> E[Diagnose Root Cause & Critique]
-    E --> F[Persist Episodic Experience in SQLite]
-    F --> G[Future Tasks: Query SQLite FTS5]
-    G --> H[Inject Relevant Lessons into Prompt Context]
+flowchart TD
+    subgraph Execution ["Task & Plan Execution"]
+        EXEC[Plan Executor] --> VERIF{Verification Result}
+        VERIF -->|Tests Pass| SUCC[Verified Solution + Evidence]
+        VERIF -->|Tests Fail| FAIL[Failed Attempt + Root Cause]
+    end
+
+    subgraph MemoryIngestion ["Extraction & Consolidation"]
+        EXTRACT[Memory Extractor]
+        SCRUB[Secret Redaction - scrubSecrets]
+        CONSOLIDATE[Conflict & Quality Consolidator]
+        SUCC --> EXTRACT
+        FAIL --> EXTRACT
+        EXTRACT --> SCRUB --> CONSOLIDATE
+    end
+
+    subgraph Storage ["SQLite + FTS5 Persistence"]
+        DB[(Knowledge Table)]
+        FTS[FTS5 Porter Index]
+        CONSOLIDATE --> DB
+        CONSOLIDATE --> FTS
+    end
+
+    subgraph Retrieval ["Multi-Factor Relevance Engine"]
+        PROMPT[User Request / Task Prompt] --> RETRIEVER[Memory Retriever]
+        FTS -->|BM25 Rank| RETRIEVER
+        DB -->|Recency + Verification + Access Boost| RETRIEVER
+        RETRIEVER --> PROMPT_INJECT[Token-Budgeted Passive Context Block]
+        PROMPT_INJECT --> RUNTIME[Agent Runtime Context]
+    end
 ```
 
-- **Project Rules & Conventions**: Manually or automatically stored coding guidelines (e.g. "Use Vitest with in-source testing", "Target ES2024").
-- **Episodic Memory**: Records of previous goals, tool invocations, failure modes, and developer critiques.
-- **SQLite FTS5 Retrieval**: High-speed BM25 full-text keyword retrieval matching upcoming task requirements to previous experiences.
+### 1. Distinct Memory Categories
+- **User Memory (`user_preference`)**: Global preferences (e.g., preferred test runners, formatting conventions, tooling workflows). Unscoped (`projectId: null`) and automatically shared across workspaces.
+- **Project Memory (`project_rule`, `architecture_decision`)**: Architecture blueprints, frameworks, database schemas, and conventions. Strictly scoped to `projectId`—never leaking into foreign repositories.
+- **Experience Memory (`experience`, `failed_attempt`)**: Verified solutions with test evidence and modified files, strictly contrasted with failed attempts documenting root-cause postmortems to prevent repeating mistakes.
+
+### 2. Multi-Factor Relevance Retrieval
+The `MemoryRetriever` ranks candidate memories using a composite evaluation:
+- **BM25 Keyword Matching**: Fast full-text matching powered by SQLite FTS5.
+- **Confidence Weighting**: Scales score based on extraction confidence ($0.1 - 1.0$).
+- **Recency Decay**: Soft logarithmic decay prioritizing recent solutions while retaining foundational rules.
+- **Verification Status Boost**: Verified solutions receive a $1.25\times$ boost over unverified observations.
+- **Access Frequency Boost**: Diminishing-returns logarithmic boost ($1 + 0.05 \cdot \log_2(1 + \text{accessCount})$).
+- **Prompt Injection Defense**: Formatted within a strict token budget ($\le 1,500$ tokens) as passive reference facts, clearly tagged with security notices and secret scrubbing.
+
+### 3. Conflict Resolution & Quality Assurance
+The `MemoryConsolidator` enforces evidence-based truth:
+- **Source Reliability Hierarchy**: `explicit_user` (100) > `verified_execution` (80) > `user_feedback` (70) > `repo_inspection` (50) > `failed_execution` (50).
+- **Duplicate & Contradiction Detection**: Calculates word-set similarity to prevent bloat. When higher-reliability memories supersede older ones, the predecessor is marked `deprecated` with a `supersededBy` pointer for full audit trails.
+- **Absolute Privacy**: `scrubSecrets` runs on all keys, content, and evidence payloads, redacting API keys, JWTs, Bearer tokens, and private credentials.
+
+### 4. Memory CLI & TUI Commands
+```bash
+# Terminal CLI commands
+evolve memory                                   # List active memories
+evolve memory search <keywords>                 # BM25 keyword search
+evolve memory user                              # Global user preferences
+evolve memory project                           # Project architecture decisions
+evolve memory experience                        # Verified solutions
+evolve memory failed                            # Failed attempts and warnings
+evolve memory review                            # Review proposed memories
+evolve memory inspect <id>                      # Inspect memory provenance & evidence
+evolve memory approve <id>                      # Approve proposed memory
+evolve memory deprecate <id>                    # Deprecate an outdated memory
+evolve memory delete <id>                       # Delete an incorrect memory
+evolve memory add <category> <key> <content>   # Explicitly teach Evolve
+
+# Interactive TUI Slash Commands
+/memory [search|user|project|experience|failed|review|approve|deprecate|delete|add]
+```
 
 ---
 
