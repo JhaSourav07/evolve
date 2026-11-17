@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Static, useApp } from 'ink';
-import type { EventEnvelope, ToolApprovalRequest, Plan, PlanId, PlanTask } from '@evolve/core';
+import type {
+  ActionRating,
+  EventEnvelope,
+  ToolApprovalRequest,
+  Plan,
+  PlanId,
+  PlanTask,
+  TaskRatings,
+} from '@evolve/core';
 import type { AgentRuntime } from '@evolve/agent';
 import { Header } from '../components/Header.js';
 import { HistoryList, type SessionSummary } from '../components/HistoryList.js';
@@ -836,6 +844,11 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               '  /integrations    - View active integrations and consent governance',
               '  /models          - Discover and inspect local Ollama models',
               '  /feedback        - Rate the last agent interaction',
+              '  /feedback action <toolCallId> <type> - Rate specific tool action',
+              '  /feedback task <taskId> [ratings]   - Rate task across 5 dimensions',
+              '  /evaluate        - List automated task evaluation reports',
+              '  /evaluate inspect <id> - Inspect full evaluation report with evidence',
+              '  /evaluate training - View SFT and DPO training candidate pairs',
               '  /clear           - Clear screen messages',
               '  /new             - Start a new session',
               '  /exit or /quit   - Exit Evolve CLI',
@@ -1149,9 +1162,235 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         setScreen('integrations');
         break;
 
-      case '/feedback':
-        setShowFeedback(true);
+      case '/feedback': {
+        const subArg = arg.trim();
+        if (!subArg) {
+          setShowFeedback(true);
+          break;
+        }
+
+        const [actionSub, ...rest] = subArg.split(/\s+/);
+        if (actionSub === 'history' || actionSub === 'list') {
+          const sessions = context.sessionRepo.listByProject(context.projectId);
+          const lines: string[] = ['Interaction Feedback History:'];
+          let count = 0;
+          for (const s of sessions) {
+            const fbList = context.feedbackService.listBySession(s.id);
+            for (const fb of fbList) {
+              count++;
+              lines.push(
+                `- [${(fb.feedbackLevel ?? 'response').toUpperCase()}] Rating: ${fb.rating} | Target: ${fb.targetId ?? fb.targetType} ${fb.notes ? `("${fb.notes}")` : ''}`,
+              );
+            }
+          }
+          if (count === 0) lines.push('  No feedback recorded yet.');
+          setStaticMessages((prev) => [
+            ...prev,
+            {
+              id: `fb_hist_${++msgCounterRef.current}`,
+              role: 'system',
+              content: lines.join('\n'),
+              timestamp: Date.now(),
+            },
+          ]);
+        } else if (actionSub === 'action') {
+          const toolCallId = rest[0];
+          const actionRating = rest[1] as ActionRating | undefined;
+          const notes = rest.slice(2).join(' ') || undefined;
+          if (!toolCallId || !actionRating) {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `fb_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content:
+                  'Usage: /feedback action <toolCallId> <correct_tool_selection|incorrect_tool_selection|successful_action|failed_action|unnecessary_action|unsafe_action> [notes]',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            const rec = context.feedbackService.recordActionFeedback({
+              sessionId,
+              toolCallId,
+              actionRating,
+              notes,
+            });
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `fb_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `Action feedback recorded for ${toolCallId}: ${rec.ratingLabel} (rating: ${rec.rating})`,
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        } else if (actionSub === 'task') {
+          const taskId = rest[0];
+          const ratingsStr = rest[1];
+          const notes = rest.slice(2).join(' ') || undefined;
+          if (!taskId) {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `fb_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /feedback task <taskId> [ratings: 5,5,5,5,5] [notes]',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            let reqSat = 5;
+            let codeQual = 5;
+            let arch = 5;
+            let corr = 5;
+            let comp = 5;
+            if (ratingsStr && ratingsStr.includes(',')) {
+              const parts = ratingsStr.split(',').map((p) => parseInt(p.trim(), 10));
+              if (parts.length >= 5) {
+                reqSat = parts[0] ?? 5;
+                codeQual = parts[1] ?? 5;
+                arch = parts[2] ?? 5;
+                corr = parts[3] ?? 5;
+                comp = parts[4] ?? 5;
+              }
+            }
+            const ratings: TaskRatings = {
+              requirementSatisfaction: reqSat,
+              codeQuality: codeQual,
+              architecture: arch,
+              correctness: corr,
+              completeness: comp,
+              overallRating: Math.round((reqSat + codeQual + arch + corr + comp) / 5),
+            };
+            const rec = context.feedbackService.recordTaskFeedback({
+              sessionId,
+              taskId,
+              ratings,
+              notes,
+            });
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `fb_${++msgCounterRef.current}`,
+                role: 'system',
+                content: `Task feedback recorded for ${taskId}: Reqs=${ratings.requirementSatisfaction}/5, Quality=${ratings.codeQuality}/5, Arch=${ratings.architecture}/5, Correctness=${ratings.correctness}/5 (score: ${rec.rating})`,
+                timestamp: Date.now(),
+              },
+            ]);
+          }
+        }
         break;
+      }
+
+      case '/evaluate':
+      case '/eval': {
+        const subArg = arg.trim();
+        const [evalSub, ...evalRest] = subArg.split(/\s+/);
+        if (evalSub === 'inspect') {
+          const id = evalRest[0];
+          if (!id) {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: `eval_err_${++msgCounterRef.current}`,
+                role: 'error',
+                content: 'Usage: /evaluate inspect <evaluationId>',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            const report = context.feedbackService.getEvaluation(id);
+            if (!report) {
+              setStaticMessages((prev) => [
+                ...prev,
+                {
+                  id: `eval_err_${++msgCounterRef.current}`,
+                  role: 'error',
+                  content: `Evaluation "${id}" not found.`,
+                  timestamp: Date.now(),
+                },
+              ]);
+            } else {
+              const lines = [
+                `Task Evaluation Report: ${report.id}`,
+                `Task: ${report.taskId ?? 'N/A'} | Status: ${report.overallStatus.toUpperCase()} | Coverage: ${report.requirementCoverage} | Training: ${report.trainingEligible ? 'Eligible' : 'Not eligible'}`,
+                '',
+                'Quality Dimensions:',
+                ...report.dimensions.map(
+                  (d) => `  ${d.result === 'positive' ? '✓' : d.result === 'partial' ? '▲' : '✗'} ${d.dimension}: ${d.result.toUpperCase()} (${d.supportingEvidence})`,
+                ),
+              ];
+              if (report.failures.length > 0) {
+                lines.push('', 'Failures:');
+                for (const f of report.failures) {
+                  lines.push(`  [${f.category}] ${f.explanation}`);
+                  if (f.evidence) lines.push(`    Evidence: ${f.evidence}`);
+                }
+              }
+              setStaticMessages((prev) => [
+                ...prev,
+                {
+                  id: `eval_rpt_${++msgCounterRef.current}`,
+                  role: 'system',
+                  content: lines.join('\n'),
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
+          }
+        } else if (evalSub === 'training') {
+          const candidates = context.feedbackService.queryTrainingCandidates({
+            projectId: context.projectId,
+          });
+          const sftCount = candidates.filter((c) => c.pairType === 'sft_demonstration').length;
+          const dpoCount = candidates.filter((c) => c.pairType === 'dpo_rejected').length;
+          const lines = [
+            `Training Candidates (${candidates.length} total):`,
+            `  SFT Demonstrations (Verified + Clean): ${sftCount}`,
+            `  DPO Contrast Pairs (Failed / Negative): ${dpoCount}`,
+            '',
+            ...candidates
+              .slice(0, 10)
+              .map(
+                (c) =>
+                  `  ${c.pairType === 'sft_demonstration' ? '[SFT]' : '[DPO]'} ${c.evaluationId.slice(0, 12)} | Session: ${c.sessionId.slice(0, 12)} | Success: ${c.isSuccessful ? 'Yes' : 'No'}`,
+              ),
+          ];
+          setStaticMessages((prev) => [
+            ...prev,
+            {
+              id: `eval_trn_${++msgCounterRef.current}`,
+              role: 'system',
+              content: lines.join('\n'),
+              timestamp: Date.now(),
+            },
+          ]);
+        } else {
+          const evaluations = context.feedbackService.listEvaluations(context.projectId);
+          const lines = ['Task Evaluations:'];
+          if (evaluations.length === 0) {
+            lines.push('  No evaluations recorded yet. Run a plan to produce automated evaluations.');
+          } else {
+            for (const e of evaluations.slice(0, 10)) {
+              lines.push(
+                `  ${e.overallStatus === 'verified' ? '✓' : e.overallStatus === 'failed' ? '✗' : '○'} [${e.id.slice(0, 12)}] Task: ${e.taskId ?? 'N/A'} | ${e.overallStatus} | Coverage: ${e.requirementCoverage} | Training: ${e.trainingEligible ? 'Eligible' : 'No'}`,
+              );
+            }
+            lines.push('', "Use '/evaluate inspect <id>' to inspect full report details.");
+          }
+          setStaticMessages((prev) => [
+            ...prev,
+            {
+              id: `eval_list_${++msgCounterRef.current}`,
+              role: 'system',
+              content: lines.join('\n'),
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+        break;
+      }
 
       case '/chat':
         setScreen('chat');

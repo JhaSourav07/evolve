@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   AgentRuntime,
   createDefaultToolRegistry,
+  EvaluationEngine,
   MemoryConsolidator,
   MemoryExtractor,
   MemoryRetriever,
@@ -51,6 +52,7 @@ export class CliContext {
   public readonly memoryRetriever: MemoryRetriever;
   public readonly memoryConsolidator: MemoryConsolidator;
   public readonly memoryExtractor: MemoryExtractor;
+  public readonly evaluationEngine: EvaluationEngine;
   public readonly consentManager: ConsentManager;
   public readonly terminalAdapter: TerminalAdapter;
   public readonly provider: OllamaProvider;
@@ -107,6 +109,10 @@ export class CliContext {
     this.memoryRetriever = new MemoryRetriever({ memoryService: this.memoryService });
     this.memoryConsolidator = new MemoryConsolidator(this.memoryService);
     this.memoryExtractor = new MemoryExtractor(this.memoryConsolidator);
+    this.evaluationEngine = new EvaluationEngine({
+      feedbackService: this.feedbackService,
+      memoryService: this.memoryService,
+    });
 
     // 5. Ensure Project row exists in DB
     this.projectId = `proj_${Buffer.from(this.rootDir).toString('hex').slice(-12)}`;
@@ -268,6 +274,7 @@ export class CliContext {
       database: this.dbInstance,
       eventSink: this.eventService,
       maxDebugAttempts,
+      evaluationEngine: this.evaluationEngine,
     });
   }
 

@@ -11,6 +11,7 @@ import {
 } from '@evolve/core';
 import { runChatCommand } from './commands/chat.js';
 import { runConfigCommand } from './commands/config.js';
+import { runEvaluateCommand } from './commands/evaluate.js';
 import { runFeedbackCommand } from './commands/feedback.js';
 import { runHistoryCommand } from './commands/history.js';
 import { runInitCommand } from './commands/init.js';
@@ -170,14 +171,62 @@ export function buildCli(): Command {
     });
 
   program
-    .command('feedback')
-    .description('Review feedback history or submit rating on previous response')
+    .command('feedback [subcommand] [args...]')
+    .description('Review feedback history or submit multi-level ratings (response, action, task)')
     .option('-r, --rating <rating>', 'Rating: 1 (correct), 0 (partial), -1 (incorrect)')
+    .option('-a, --action-type <type>', 'Action feedback type: correct_tool_selection, incorrect_tool_selection, successful_action, failed_action, unnecessary_action, unsafe_action')
+    .option('--ratings <ratings>', 'Task ratings: comma-separated 1-5 (req,code,arch,corr,comp)')
     .option('-n, --notes <notes>', 'Feedback notes or explanation')
     .option('--correction <correction>', 'Written code correction')
-    .action(async (opts: { rating?: string; notes?: string; correction?: string }) => {
-      await runFeedbackCommand(opts);
-    });
+    .action(
+      async (
+        subcommand?: string,
+        args?: string[],
+        opts?: {
+          rating?: string;
+          actionType?: string;
+          ratings?: string;
+          notes?: string;
+          correction?: string;
+        },
+      ) => {
+        await runFeedbackCommand({
+          subcommand,
+          args,
+          rating: opts?.rating,
+          actionType: opts?.actionType,
+          taskRatings: opts?.ratings,
+          notes: opts?.notes,
+          correction: opts?.correction,
+        });
+      },
+    );
+
+  program
+    .command('evaluate [subcommand] [args...]')
+    .description('Inspect task evaluation reports, quality dimensions, evidence, and training candidates')
+    .option('--status <status>', 'Filter by status: verified | verified_with_limitations | unverified | failed')
+    .option('-r, --rating <rating>', 'Filter by human rating: 1 | 0 | -1')
+    .option('-c, --category <category>', 'Filter by failure category')
+    .action(
+      async (
+        subcommand?: string,
+        args?: string[],
+        opts?: {
+          status?: string;
+          rating?: string;
+          category?: string;
+        },
+      ) => {
+        await runEvaluateCommand({
+          subcommand,
+          args,
+          status: opts?.status,
+          rating: opts?.rating,
+          category: opts?.category,
+        });
+      },
+    );
 
   program
     .command('config')
