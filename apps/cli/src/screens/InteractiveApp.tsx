@@ -13,6 +13,9 @@ import { ModelsList } from '../components/ModelsList.js';
 import { StatusCard, type StatusData } from '../components/StatusCard.js';
 import { ToolApprovalPrompt } from '../components/ToolApprovalPrompt.js';
 import { FeedbackPrompt } from '../components/FeedbackPrompt.js';
+import { PlanCard } from '../components/PlanCard.js';
+import { PlanHistoryList } from '../components/PlanHistoryList.js';
+import type { Plan, PlanId } from '@evolve/core';
 import type { CliContext } from '../context.js';
 
 export interface InteractiveAppProps {
@@ -20,8 +23,9 @@ export interface InteractiveAppProps {
   initialPrompt?: string | undefined;
   initialModel?: string | undefined;
   initialScreen?:
-    | ('chat' | 'status' | 'history' | 'memory' | 'integrations' | 'models' | 'model_select')
+    | ('chat' | 'status' | 'history' | 'memory' | 'integrations' | 'models' | 'model_select' | 'plan' | 'plan_history')
     | undefined;
+  initialPlanId?: string | undefined;
 }
 
 export const InteractiveApp: React.FC<InteractiveAppProps> = ({
@@ -29,6 +33,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   initialPrompt,
   initialModel,
   initialScreen,
+  initialPlanId,
 }) => {
   const { exit } = useApp();
 
@@ -37,10 +42,19 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
   // Determine initial screen: if user provided prompt or explicit model, start in chat; otherwise scan & select
   const [screen, setScreen] = useState<string>(() => {
+    if (initialPlanId) return 'plan';
     if (initialScreen) return initialScreen;
     if (initialModel || initialPrompt) return 'chat';
     return 'model_select';
   });
+
+  const [activePlan, setActivePlan] = useState<Plan | null>(() => {
+    if (initialPlanId) {
+      return context.planner.getPlan(initialPlanId as PlanId) ?? null;
+    }
+    return null;
+  });
+  const [plansHistoryList, setPlansHistoryList] = useState<readonly Plan[]>([]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -331,6 +345,154 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     }
   };
 
+  const handleApprovePlan = async (pId: string) => {
+    try {
+      const approved = await context.planner.approvePlan(pId as PlanId);
+      setActivePlan(approved);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `plan_app_${Date.now()}`,
+          role: 'system',
+          content: `Plan ${pId} has been APPROVED. Ready for execution in Phase 3.`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: 'error',
+          content: `Failed to approve plan ${pId}: ${msg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  };
+
+  const handleRejectPlan = async (pId: string, reason?: string) => {
+    try {
+      const rejected = await context.planner.rejectPlan(pId as PlanId, reason);
+      setActivePlan(rejected);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `plan_rej_${Date.now()}`,
+          role: 'system',
+          content: `Plan ${pId} has been REJECTED.${reason ? ` Reason: "${reason}"` : ''}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: 'error',
+          content: `Failed to reject plan ${pId}: ${msg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  };
+
+  const handleRegeneratePlan = async (pId: string) => {
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `plan_regen_${Date.now()}`,
+        role: 'system',
+        content: `Regenerating plan ${pId} with updated repository analysis...`,
+        timestamp: Date.now(),
+      },
+    ]);
+
+    try {
+      const regenerated = await context.planner.regeneratePlan(pId as PlanId);
+      setActivePlan(regenerated);
+      setScreen('plan');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `plan_regen_ok_${Date.now()}`,
+          role: 'system',
+          content: `Plan regenerated successfully (Revision ${regenerated.revision}, ${regenerated.tasks.length} tasks).`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: 'error',
+          content: `Failed to regenerate plan ${pId}: ${msg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreatePlan = async (promptText: string, mode: 'quick' | 'detailed' = 'detailed') => {
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `usr_${Date.now()}`,
+        role: 'user',
+        content: `/plan ${mode === 'quick' ? 'quick ' : ''}${promptText}`,
+        timestamp: Date.now(),
+      },
+      {
+        id: `plan_gen_${Date.now()}`,
+        role: 'system',
+        content: `Analyzing repository intelligence and generating ${mode} implementation plan...`,
+        timestamp: Date.now(),
+      },
+    ]);
+
+    try {
+      const plan = await context.planner.createPlan({
+        userPrompt: promptText,
+        sessionId,
+        mode,
+      });
+
+      setActivePlan(plan);
+      setScreen('plan');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `plan_ok_${Date.now()}`,
+          role: 'system',
+          content: `Plan generated: "${plan.title}" (${plan.tasks.length} tasks, complexity: ${plan.estimatedComplexity}, risk: ${plan.risks.overallRisk}). Review and approve below.`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: 'error',
+          content: `Failed to generate plan: ${msg}`,
+          recoveryHint: 'Ensure Ollama is running and has sufficient context window.',
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSlashCommand = async (cmdText: string) => {
     const parts = cmdText.trim().split(/\s+/);
     const cmd = parts[0]?.toLowerCase();
@@ -346,6 +508,12 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             content: [
               'Evolve CLI Commands:',
               '  /chat            - Return to active chat view',
+              '  /plan [req]      - Generate repository-aware implementation plan (detailed)',
+              '  /plan quick [r]  - Generate a concise implementation plan',
+              '  /plan detailed   - Generate a comprehensive implementation plan',
+              '  /plan history    - View previous plans generated for this project',
+              '  /plan approve    - Approve active plan for execution in Phase 3',
+              '  /plan reject     - Reject active plan with optional reason',
               '  /model [name/#]  - Select or switch active Ollama model',
               '  /details         - Toggle thinking & tool output details (Shortcut: Ctrl+O)',
               '  /status          - Show system and project status dashboard',
@@ -458,6 +626,106 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       case '/chat':
         setScreen('chat');
         break;
+
+      case '/plan': {
+        const subArg = arg.trim();
+        if (!subArg) {
+          if (activePlan) {
+            setScreen('plan');
+          } else {
+            const plans = context.planner.listPlans(context.projectId);
+            if (plans.length > 0) {
+              setPlansHistoryList(plans);
+              setActivePlan(plans[0] ?? null);
+              setScreen('plan');
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `sys_${Date.now()}`,
+                  role: 'system',
+                  content:
+                    'No active plan. Usage:\n  /plan <objective>\n  /plan quick <objective>\n  /plan detailed <objective>\n  /plan history\n  /plan approve [planId]\n  /plan reject [planId]',
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
+          }
+          break;
+        }
+
+        const firstToken = subArg.split(/\s+/)[0]?.toLowerCase();
+        const remainder = subArg.slice(firstToken?.length ?? 0).trim();
+
+        if (firstToken === 'history') {
+          const plans = context.planner.listPlans(context.projectId);
+          setPlansHistoryList(plans);
+          setScreen('plan_history');
+        } else if (firstToken === 'approve') {
+          const targetId = remainder || activePlan?.planId;
+          if (!targetId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `err_${Date.now()}`,
+                role: 'error',
+                content: 'Specify plan ID to approve: /plan approve <planId>',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            await handleApprovePlan(targetId);
+          }
+        } else if (firstToken === 'reject') {
+          const targetId = remainder.split(/\s+/)[0] || activePlan?.planId;
+          const reason = remainder.slice(targetId?.length ?? 0).trim() || undefined;
+          if (!targetId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `err_${Date.now()}`,
+                role: 'error',
+                content: 'Specify plan ID to reject: /plan reject <planId> [reason]',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            await handleRejectPlan(targetId, reason);
+          }
+        } else if (firstToken === 'quick') {
+          if (!remainder) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `err_${Date.now()}`,
+                role: 'error',
+                content: 'Please specify your objective: /plan quick <objective>',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            await handleCreatePlan(remainder, 'quick');
+          }
+        } else if (firstToken === 'detailed') {
+          if (!remainder) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `err_${Date.now()}`,
+                role: 'error',
+                content: 'Please specify your objective: /plan detailed <objective>',
+                timestamp: Date.now(),
+              },
+            ]);
+          } else {
+            await handleCreatePlan(remainder, 'detailed');
+          }
+        } else {
+          // Default detailed mode with prompt
+          await handleCreatePlan(subArg, 'detailed');
+        }
+        break;
+      }
 
       case '/exit':
       case '/quit':
@@ -651,6 +919,30 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           }))}
           isOnline={isOnline}
           providerUrl={context.config.model.baseUrl}
+        />
+      )}
+
+      {screen === 'plan' && activePlan && (
+        <PlanCard
+          plan={activePlan}
+          onApprove={(pId) => handleApprovePlan(pId)}
+          onReject={(pId) => handleRejectPlan(pId)}
+          onRegenerate={(pId) => handleRegeneratePlan(pId)}
+          onClose={() => setScreen('chat')}
+        />
+      )}
+
+      {screen === 'plan_history' && (
+        <PlanHistoryList
+          plans={plansHistoryList}
+          onSelectPlan={(pId) => {
+            const found = plansHistoryList.find((p) => p.planId === pId);
+            if (found) {
+              setActivePlan(found);
+              setScreen('plan');
+            }
+          }}
+          onClose={() => setScreen('chat')}
         />
       )}
 

@@ -198,6 +198,7 @@ evolve/
 │   ├── core/            # Domain models, schema validation (Zod), and typed event bus
 │   ├── db/              # SQLite persistence with Drizzle ORM, WAL mode, migrations, and FTS5
 │   ├── indexer/         # Repository discovery, AST symbol extraction, incremental indexing & FTS5
+│   ├── planner/         # Task understanding, repo-aware decomposition, DAG dependency engine & plan revision
 │   ├── agent/           # Cognitive loop, Ollama provider, 15 sandboxed tools, and Reflexion
 │   ├── integrations/    # Event adapters (Terminal, VS Code, Pi) and importers (Claude, Gemini)
 │   └── ml/              # Python dataset preparation, secret scrubbing, and SFT/DPO pipelines
@@ -283,6 +284,9 @@ evolve status
 | :------------------------------ | :------------------------------------------------------------------ | :---------------------------------------------------------------------- |
 | `evolve`                        | Launch the full interactive terminal UI                             | `evolve`                                                                |
 | `evolve chat [prompt]`          | Start interactive mode or execute a single task prompt              | `evolve chat "Fix failing tests"`                                       |
+| `evolve plan [request]`         | Generate repository-aware plan or inspect/approve/reject plans       | `evolve plan "Add JWT auth to express" --mode detailed`                 |
+| `evolve plan --history`         | List previous plans generated for the workspace                     | `evolve plan --history`                                                 |
+| `evolve plan --approve <id>`    | Approve plan for execution in Phase 3                               | `evolve plan --approve plan_abc123`                                     |
 | `evolve init`                   | Initialize `.evolve` directory, SQLite database, and default config | `evolve init`                                                           |
 | `evolve status`                 | Inspect project, git branch, active Ollama model, and storage state | `evolve status`                                                         |
 | `evolve history`                | List previous agent sessions in the current workspace               | `evolve history`                                                        |
@@ -301,6 +305,12 @@ Type these slash commands directly inside the chat prompt:
 | Slash Command                 | Description                                                        |
 | :---------------------------- | :----------------------------------------------------------------- |
 | `/help`                       | Display interactive command and shortcut reference                 |
+| `/plan [objective]`           | Generate repository-aware implementation plan (detailed mode)      |
+| `/plan quick [objective]`     | Generate a concise, single-stage implementation plan                |
+| `/plan detailed [obj]`        | Generate a full multi-wave implementation plan with risk profile    |
+| `/plan history`               | Browse and inspect previous plans generated for this project       |
+| `/plan approve [planId]`      | Approve active plan for execution                                  |
+| `/plan reject [planId]`       | Reject active plan with optional critique                          |
 | `/details` _(or `/thinking`)_ | Toggle collapsible model thinking and multi-line tool outputs      |
 | `/model [name/#]`             | Switch the active Ollama model on-the-fly                          |
 | `/models`                     | Discover available local Ollama models and check connection status |

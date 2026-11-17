@@ -47,6 +47,9 @@ importers:
       '@evolve/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@evolve/planner':
+        specifier: workspace:*
+        version: link:../../packages/planner
       commander:
         specifier: ^15.1.0
         version: 15.1.0

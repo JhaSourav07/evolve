@@ -15,11 +15,13 @@ import {
   EventService,
   FeedbackService,
   MemoryService,
+  PlanRepository,
   ProjectRepository,
   SessionRepository,
   type EvolveDatabaseInstance,
 } from '@evolve/db';
 import { ConsentManager, TerminalAdapter } from '@evolve/integrations';
+import { PlanningEngine } from '@evolve/planner';
 
 export interface CliContextOptions {
   rootDir?: string | undefined;
@@ -34,6 +36,7 @@ export class CliContext {
   public readonly dbInstance: EvolveDatabaseInstance;
   public readonly projectRepo: ProjectRepository;
   public readonly sessionRepo: SessionRepository;
+  public readonly planRepo: PlanRepository;
   public readonly eventService: EventService;
   public readonly feedbackService: FeedbackService;
   public readonly memoryService: MemoryService;
@@ -42,6 +45,7 @@ export class CliContext {
   public readonly provider: OllamaProvider;
   public readonly projectId: string;
   public readonly contextWindow: number;
+  public readonly planner: PlanningEngine;
 
   constructor(options: CliContextOptions = {}) {
     this.rootDir = options.rootDir ?? process.cwd();
@@ -85,6 +89,7 @@ export class CliContext {
     // 4. Initialize Database Repositories & Services
     this.projectRepo = new ProjectRepository(this.dbInstance.db);
     this.sessionRepo = new SessionRepository(this.dbInstance.db);
+    this.planRepo = new PlanRepository(this.dbInstance.db);
     this.eventService = new EventService(this.dbInstance.db);
     this.feedbackService = new FeedbackService(this.dbInstance.db);
     this.memoryService = new MemoryService(this.dbInstance.db, this.dbInstance.sqlite);
@@ -126,6 +131,16 @@ export class CliContext {
       baseUrl: this.config.model.baseUrl,
       contextWindow: this.contextWindow,
       timeoutMs: 120_000,
+    });
+
+    // 8. Planning Engine (Repository-Aware Planning, Task Decomposition & DAG)
+    this.planner = new PlanningEngine({
+      provider: this.provider,
+      db: this.dbInstance.db,
+      sqlite: this.dbInstance.sqlite,
+      rootDir: this.rootDir,
+      projectId: this.projectId,
+      eventSink: this.eventService,
     });
   }
 

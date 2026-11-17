@@ -17,6 +17,7 @@ import { runInitCommand } from './commands/init.js';
 import { runIntegrationsCommand } from './commands/integrations.js';
 import { runMemoryCommand } from './commands/memory.js';
 import { runModelsCommand } from './commands/models.js';
+import { runPlanCommand } from './commands/plan.js';
 import { runStatusCommand } from './commands/status.js';
 
 export function formatCliBanner(): string {
@@ -63,6 +64,29 @@ export function buildCli(): Command {
     .action(async (prompt?: string, opts?: { model?: string }) => {
       await runChatCommand(prompt, opts?.model);
     });
+
+  program
+    .command('plan [request]')
+    .description('Generate, inspect, approve, or reject repository-aware implementation plans')
+    .option('--mode <mode>', 'Planning mode: quick | detailed', 'detailed')
+    .option('--approve <planId>', 'Approve a plan for execution')
+    .option('--reject <planId>', 'Reject a plan')
+    .option('--history', 'List previous plans for this project')
+    .option('-m, --model <model>', 'Ollama model to use')
+    .action(
+      async (
+        request?: string,
+        opts?: {
+          mode?: 'quick' | 'detailed';
+          approve?: string;
+          reject?: string;
+          history?: boolean;
+          model?: string;
+        },
+      ) => {
+        await runPlanCommand(request, opts);
+      },
+    );
 
   program
     .command('init')

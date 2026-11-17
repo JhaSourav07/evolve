@@ -17,6 +17,7 @@
     "@evolve/db": "workspace:*",
     "@evolve/indexer": "workspace:*",
     "@evolve/integrations": "workspace:*",
+    "@evolve/planner": "workspace:*",
     "commander": "^15.1.0",
     "ink": "^8.0.0",
     "react": "^19.3.1"
