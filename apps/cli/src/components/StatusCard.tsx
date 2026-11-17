@@ -32,32 +32,32 @@ export const StatusCard: React.FC<StatusCardProps> = ({ status }) => {
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
+      borderStyle="single"
       borderColor={Theme.colors.border}
       paddingX={1}
       marginY={1}
     >
-      <Box marginBottom={1}>
+      <Box justifyContent="space-between" marginBottom={1}>
         <Text color={Theme.colors.accent} bold>
-          {Theme.icons.sparkle} EVOLVE SYSTEM STATUS
+          EVOLVE SYSTEM STATUS
         </Text>
+        <Text color={Theme.colors.dim}>[Esc] Back to chat</Text>
       </Box>
 
       {/* Project & Environment */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={Theme.colors.text} bold underline>
+        <Text color={Theme.colors.silver} bold>
           Workspace
         </Text>
         <Box paddingLeft={2} flexDirection="column">
           <Text color={Theme.colors.text}>
-            Project: <Text color={Theme.colors.accent}>{status.projectName}</Text> (
-            {status.projectId})
+            Project: <Text color={Theme.colors.accent}>{status.projectName}</Text> ({status.projectId})
           </Text>
           <Text color={Theme.colors.dim}>Root: {status.rootDir}</Text>
           {status.gitBranch && (
             <Text color={Theme.colors.text}>
               Git:{' '}
-              <Text color={Theme.colors.accent}>
+              <Text color={Theme.colors.silver}>
                 {Theme.icons.git} {status.gitBranch}
               </Text>
               <Text color={status.gitClean ? Theme.colors.success : Theme.colors.warning}>
@@ -71,7 +71,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({ status }) => {
 
       {/* Model & Provider */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={Theme.colors.text} bold underline>
+        <Text color={Theme.colors.silver} bold>
           Model & Inference
         </Text>
         <Box paddingLeft={2} flexDirection="column">
@@ -79,12 +79,9 @@ export const StatusCard: React.FC<StatusCardProps> = ({ status }) => {
             Provider: <Text color={Theme.colors.accent}>{status.provider}</Text>
           </Text>
           <Text color={Theme.colors.text}>
-            Model: <Text color={Theme.colors.accent}>{status.model}</Text>
+            Model: <Text color={Theme.colors.accent}>{status.model}</Text>{' '}
             <Text color={status.isOnline ? Theme.colors.success : Theme.colors.error}>
-              {' '}
-              {status.isOnline
-                ? `${Theme.icons.bullet} Online & Responsive`
-                : `${Theme.icons.bulletOpen} Offline`}
+              ({status.isOnline ? 'Online' : 'Offline'})
             </Text>
           </Text>
         </Box>
@@ -92,45 +89,34 @@ export const StatusCard: React.FC<StatusCardProps> = ({ status }) => {
 
       {/* Memory & Database */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={Theme.colors.text} bold underline>
-          Storage & Memory Engine
+        <Text color={Theme.colors.silver} bold>
+          Storage & Memory
         </Text>
         <Box paddingLeft={2} flexDirection="column">
+          <Text color={Theme.colors.dim}>Session: {status.sessionId}</Text>
+          <Text color={Theme.colors.dim}>Database: {status.dbPath}</Text>
           <Text color={Theme.colors.text}>
-            Active Session: <Text color={Theme.colors.dim}>{status.sessionId}</Text>
-          </Text>
-          <Text color={Theme.colors.text}>
-            Database: <Text color={Theme.colors.dim}>{status.dbPath}</Text>
-          </Text>
-          <Text color={Theme.colors.text}>
-            Historical Sessions: <Text color={Theme.colors.accent}>{status.sessionCount}</Text> •
-            Indexed Memories: <Text color={Theme.colors.accent}>{status.memoryCount}</Text>
+            Sessions: <Text color={Theme.colors.silver}>{status.sessionCount}</Text> • Memories:{' '}
+            <Text color={Theme.colors.silver}>{status.memoryCount}</Text>
           </Text>
         </Box>
       </Box>
 
       {/* Integrations & Consent */}
       <Box flexDirection="column">
-        <Text color={Theme.colors.text} bold underline>
-          Integrations & Consent
+        <Text color={Theme.colors.silver} bold>
+          Integrations
         </Text>
-        <Box paddingLeft={2}>
+        <Box paddingLeft={2} gap={2}>
           <Text color={status.integrations.terminal ? Theme.colors.success : Theme.colors.dim}>
             Terminal: {status.integrations.terminal ? Theme.icons.check : Theme.icons.cross}
           </Text>
-          <Text color={Theme.colors.dim}> | </Text>
           <Text color={status.integrations.vscode ? Theme.colors.success : Theme.colors.dim}>
             VS Code: {status.integrations.vscode ? Theme.icons.check : Theme.icons.cross}
           </Text>
-          <Text color={Theme.colors.dim}> | </Text>
-          <Text color={status.integrations.pi ? Theme.colors.success : Theme.colors.dim}>
-            Pi: {status.integrations.pi ? Theme.icons.check : Theme.icons.cross}
-          </Text>
-          <Text color={Theme.colors.dim}> | </Text>
           <Text color={status.integrations.claude ? Theme.colors.success : Theme.colors.dim}>
             Claude: {status.integrations.claude ? Theme.icons.check : Theme.icons.cross}
           </Text>
-          <Text color={Theme.colors.dim}> | </Text>
           <Text color={status.integrations.gemini ? Theme.colors.success : Theme.colors.dim}>
             Gemini: {status.integrations.gemini ? Theme.icons.check : Theme.icons.cross}
           </Text>

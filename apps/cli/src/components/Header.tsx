@@ -19,43 +19,38 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={Theme.colors.border}
-      paddingX={1}
+      flexDirection="row"
+      justifyContent="space-between"
       marginBottom={1}
+      paddingBottom={0}
     >
-      <Box justifyContent="space-between">
-        <Box>
-          <Text color={Theme.colors.accent} bold>
-            {Theme.icons.sparkle} EVOLVE
+      <Box gap={1}>
+        <Text color={Theme.colors.accent} bold>
+          EVOLVE
+        </Text>
+        <Text color={Theme.colors.dim}>{Theme.icons.bar}</Text>
+        <Text color={Theme.colors.silver} bold>
+          {projectName}
+        </Text>
+        {gitBranch && (
+          <Text color={Theme.colors.dim}>
+            ({Theme.icons.git} {gitBranch})
           </Text>
-          <Text color={Theme.colors.dim}> | </Text>
-          <Text color={Theme.colors.text} bold>
-            {projectName}
-          </Text>
-          {gitBranch && (
-            <>
-              <Text color={Theme.colors.dim}> (</Text>
-              <Text color={Theme.colors.accent}>
-                {Theme.icons.git} {gitBranch}
-              </Text>
-              <Text color={Theme.colors.dim}>)</Text>
-            </>
-          )}
-        </Box>
-        <Box>
-          <Text color={isOnline ? Theme.colors.success : Theme.colors.warning}>
-            {isOnline ? Theme.icons.bullet : Theme.icons.bulletOpen} {model}
-          </Text>
-        </Box>
+        )}
       </Box>
-      <Box marginTop={0} justifyContent="space-between">
-        <Box>
-          <Text color={Theme.colors.dim} dimColor>
-            Mode: {activeScreen.toUpperCase()} • Type /help for commands • Ctrl+C to cancel/exit
+
+      <Box gap={1}>
+        <Text color={isOnline ? Theme.colors.success : Theme.colors.warning}>
+          {isOnline ? Theme.icons.bullet : Theme.icons.bulletOpen}
+        </Text>
+        <Text color={Theme.colors.dim}>
+          {model}
+        </Text>
+        {activeScreen !== 'chat' && (
+          <Text color={Theme.colors.silver} bold>
+            [{activeScreen.toUpperCase()}]
           </Text>
-        </Box>
+        )}
       </Box>
     </Box>
   );

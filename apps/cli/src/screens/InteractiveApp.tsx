@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, useApp } from 'ink';
-import type { EventEnvelope, ToolApprovalRequest } from '@evolve/core';
+import { Box, Static, useApp } from 'ink';
+import type { EventEnvelope, ToolApprovalRequest, Plan, PlanId } from '@evolve/core';
 import type { AgentRuntime } from '@evolve/agent';
 import { Header } from '../components/Header.js';
 import { HistoryList, type SessionSummary } from '../components/HistoryList.js';
@@ -15,7 +15,8 @@ import { ToolApprovalPrompt } from '../components/ToolApprovalPrompt.js';
 import { FeedbackPrompt } from '../components/FeedbackPrompt.js';
 import { PlanCard } from '../components/PlanCard.js';
 import { PlanHistoryList } from '../components/PlanHistoryList.js';
-import type { Plan, PlanId } from '@evolve/core';
+import { ToolExecution } from '../components/ToolExecution.js';
+import { MarkdownRenderer } from '../components/MarkdownRenderer.js';
 import type { CliContext } from '../context.js';
 
 export interface InteractiveAppProps {
@@ -56,14 +57,30 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   });
   const [plansHistoryList, setPlansHistoryList] = useState<readonly Plan[]>([]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  // Message counter for deterministic monotonic keys
+  const msgCounterRef = useRef(0);
+
+  // Static committed messages (rendered once, never redrawn, zero cursor jumping)
+  const [staticMessages, setStaticMessages] = useState<ChatMessage[]>([
     {
-      id: 'welcome',
+      id: `msg_welcome_${++msgCounterRef.current}`,
       role: 'system',
       content: 'Evolve interactive session initialized. Type your request or /help for commands.',
       timestamp: Date.now(),
     },
   ]);
+
+  // Active in-flight state (strictly bounded height)
+  const [activeTool, setActiveTool] = useState<{
+    toolName: string;
+    args?: Record<string, unknown> | undefined;
+    startTime: number;
+  } | null>(null);
+
+  const [streamingText, setStreamingText] = useState<string>('');
+  const streamBufferRef = useRef<string>('');
+  const throttleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [sessionId, setSessionId] = useState(() => context.createSession());
@@ -97,6 +114,19 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   const [historySessions, setHistorySessions] = useState<SessionSummary[]>([]);
   const [memoriesList, setMemoriesList] = useState<MemoryEntry[]>([]);
 
+  // Clean cursor on unmount
+  useEffect(() => {
+    const handleResize = () => {
+      // Force repaint boundary on resize without jumping
+    };
+    process.stdout.on('resize', handleResize);
+
+    return () => {
+      process.stdout.off('resize', handleResize);
+      process.stdout.write('\x1b[?25h'); // Restore cursor
+    };
+  }, []);
+
   // Function to scan and discover Ollama models
   const scanModelsAndHealth = async (): Promise<ModelOption[]> => {
     const health = await context.provider.checkHealth();
@@ -125,7 +155,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     async function init() {
       const options = await scanModelsAndHealth();
 
-      // Check git status
       try {
         const { execSync } = await import('node:child_process');
         const branch = execSync('git rev-parse --abbrev-ref HEAD', {
@@ -150,7 +179,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       const modelExists = options.some((m) => m.name === activeModel);
       if (!modelExists && options.length > 0) {
-        // If the configured model does not exist locally and we're not waiting for user selection
         if (screen !== 'model_select') {
           const preferred =
             options.find((m) => m.name.toLowerCase().includes('coder')) ||
@@ -163,12 +191,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         }
       }
 
-      // If initialPrompt provided, execute it immediately with the effective model
       if (initialPrompt && initialPrompt.trim()) {
         setScreen('chat');
         handleUserPrompt(initialPrompt.trim());
       } else if (!initialModel && options.length > 0 && screen === 'model_select') {
-        // Stay on model_select to let user choose
         setScreen('model_select');
       }
     }
@@ -183,14 +209,13 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   const selectModelAndStart = (modelName: string) => {
     context.setModel(modelName);
     setActiveModel(modelName);
-    // Reset runtime so next prompt uses the new model
     runtimeRef.current = null;
     const newSid = context.createSession();
     setSessionId(newSid);
-    setMessages((prev) => [
+    setStaticMessages((prev) => [
       ...prev,
       {
-        id: `sys_${Date.now()}`,
+        id: `sys_${++msgCounterRef.current}`,
         role: 'system',
         content: `Active model set to: ${modelName}. Ready for your requests.`,
         timestamp: Date.now(),
@@ -203,21 +228,42 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     }
   };
 
+  // Throttled token streaming
+  const handleStreamChunk = (delta: string) => {
+    streamBufferRef.current += delta;
+    if (!throttleTimerRef.current) {
+      throttleTimerRef.current = setTimeout(() => {
+        setStreamingText(streamBufferRef.current);
+        throttleTimerRef.current = null;
+      }, 45);
+    }
+  };
+
+  const finalizeStreaming = () => {
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = null;
+    }
+    const finalVal = streamBufferRef.current;
+    streamBufferRef.current = '';
+    setStreamingText('');
+    return finalVal;
+  };
+
   const handleUserPrompt = async (promptText: string) => {
-    // 1. Handle Slash Commands
     if (promptText.startsWith('/')) {
       handleSlashCommand(promptText);
       return;
     }
 
-    // 2. Add user message to UI
+    // Add user message to static committed scrollback
     const userMsg: ChatMessage = {
-      id: `usr_${Date.now()}`,
+      id: `usr_${++msgCounterRef.current}`,
       role: 'user',
       content: promptText,
       timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    setStaticMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
     setScreen('chat');
 
@@ -225,7 +271,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     abortControllerRef.current = abortController;
 
     try {
-      // 3. Obtain or initialize AgentRuntime (preserves multi-turn conversation)
       if (!runtimeRef.current) {
         runtimeRef.current = context.createAgentRuntime(
           sessionId,
@@ -245,22 +290,17 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       }
 
       const runtime = runtimeRef.current;
+      let activeToolStartTime = 0;
 
-      // Listen for runtime events to display tool actions and streaming responses
       const unsub = runtime.onAny((event: EventEnvelope) => {
         if (event.type === 'tool_call') {
           const payload = event.payload as { toolName: string; arguments: Record<string, unknown> };
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `tc_${Date.now()}`,
-              role: 'tool_call',
-              content: '',
-              toolName: payload.toolName,
-              toolArgs: payload.arguments,
-              timestamp: Date.now(),
-            },
-          ]);
+          activeToolStartTime = Date.now();
+          setActiveTool({
+            toolName: payload.toolName,
+            args: payload.arguments,
+            startTime: activeToolStartTime,
+          });
         } else if (event.type === 'tool_result') {
           const payload = event.payload as {
             toolName: string;
@@ -268,46 +308,52 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             error?: string;
             success: boolean;
           };
-          setMessages((prev) => [
+          const duration = activeToolStartTime > 0 ? Date.now() - activeToolStartTime : undefined;
+          setActiveTool(null);
+          setStaticMessages((prev) => [
             ...prev,
             {
-              id: `tr_${Date.now()}`,
+              id: `tr_${++msgCounterRef.current}`,
               role: 'tool_result',
               content: payload.output ?? payload.error ?? '',
               toolName: payload.toolName,
               toolSuccess: payload.success,
+              toolDurationMs: duration,
               timestamp: Date.now(),
             },
           ]);
         }
       });
 
-      // 4. Run Agent Loop
       const result = await runtime.run(promptText, {
         signal: abortController.signal,
         sessionId,
+        onChunk: ({ delta }) => {
+          handleStreamChunk(delta);
+        },
       });
 
       unsub();
+      finalizeStreaming();
+      setActiveTool(null);
 
-      // 5. Add response to UI (Strictly avoid echoing user prompt on error)
       if (!result.success) {
-        setMessages((prev) => [
+        setStaticMessages((prev) => [
           ...prev,
           {
-            id: `err_${Date.now()}`,
+            id: `err_${++msgCounterRef.current}`,
             role: 'error',
             content: result.error || 'Agent execution failed without model response.',
             recoveryHint:
-              'Verify that Ollama is running (`ollama serve`) and the model is loaded (`ollama ps`). You can switch models with /model.',
+              'Verify that Ollama is running (`ollama serve`) and the model is loaded. Use /model to switch.',
             timestamp: Date.now(),
           },
         ]);
       } else {
-        setMessages((prev) => [
+        setStaticMessages((prev) => [
           ...prev,
           {
-            id: `asst_${Date.now()}`,
+            id: `asst_${++msgCounterRef.current}`,
             role: 'assistant',
             content: result.finalResponse || 'Task completed.',
             ...(result.thinking ? { thinking: result.thinking } : {}),
@@ -316,6 +362,8 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         ]);
       }
     } catch (err: unknown) {
+      finalizeStreaming();
+      setActiveTool(null);
       const errMessage = err instanceof Error ? err.message : String(err);
       const isAbort = errMessage.includes('abort') || abortController.signal.aborted;
 
@@ -323,10 +371,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         ? undefined
         : `Check that Ollama is running and model "${activeModel}" is available. Use /model to switch.`;
 
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `err_${Date.now()}`,
+          id: `err_${++msgCounterRef.current}`,
           role: isAbort ? 'system' : 'error',
           content: isAbort ? 'Operation cancelled by user.' : errMessage,
           ...(recovery ? { recoveryHint: recovery } : {}),
@@ -349,10 +397,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     try {
       const approved = await context.planner.approvePlan(pId as PlanId);
       setActivePlan(approved);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `plan_app_${Date.now()}`,
+          id: `plan_app_${++msgCounterRef.current}`,
           role: 'system',
           content: `Plan ${pId} has been APPROVED. Ready for execution in Phase 3.`,
           timestamp: Date.now(),
@@ -360,10 +408,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `err_${Date.now()}`,
+          id: `err_${++msgCounterRef.current}`,
           role: 'error',
           content: `Failed to approve plan ${pId}: ${msg}`,
           timestamp: Date.now(),
@@ -376,10 +424,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     try {
       const rejected = await context.planner.rejectPlan(pId as PlanId, reason);
       setActivePlan(rejected);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `plan_rej_${Date.now()}`,
+          id: `plan_rej_${++msgCounterRef.current}`,
           role: 'system',
           content: `Plan ${pId} has been REJECTED.${reason ? ` Reason: "${reason}"` : ''}`,
           timestamp: Date.now(),
@@ -387,10 +435,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `err_${Date.now()}`,
+          id: `err_${++msgCounterRef.current}`,
           role: 'error',
           content: `Failed to reject plan ${pId}: ${msg}`,
           timestamp: Date.now(),
@@ -401,10 +449,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
   const handleRegeneratePlan = async (pId: string) => {
     setIsLoading(true);
-    setMessages((prev) => [
+    setStaticMessages((prev) => [
       ...prev,
       {
-        id: `plan_regen_${Date.now()}`,
+        id: `plan_regen_${++msgCounterRef.current}`,
         role: 'system',
         content: `Regenerating plan ${pId} with updated repository analysis...`,
         timestamp: Date.now(),
@@ -415,10 +463,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       const regenerated = await context.planner.regeneratePlan(pId as PlanId);
       setActivePlan(regenerated);
       setScreen('plan');
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `plan_regen_ok_${Date.now()}`,
+          id: `plan_regen_ok_${++msgCounterRef.current}`,
           role: 'system',
           content: `Plan regenerated successfully (Revision ${regenerated.revision}, ${regenerated.tasks.length} tasks).`,
           timestamp: Date.now(),
@@ -426,10 +474,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `err_${Date.now()}`,
+          id: `err_${++msgCounterRef.current}`,
           role: 'error',
           content: `Failed to regenerate plan ${pId}: ${msg}`,
           timestamp: Date.now(),
@@ -442,16 +490,16 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
   const handleCreatePlan = async (promptText: string, mode: 'quick' | 'detailed' = 'detailed') => {
     setIsLoading(true);
-    setMessages((prev) => [
+    setStaticMessages((prev) => [
       ...prev,
       {
-        id: `usr_${Date.now()}`,
+        id: `usr_${++msgCounterRef.current}`,
         role: 'user',
         content: `/plan ${mode === 'quick' ? 'quick ' : ''}${promptText}`,
         timestamp: Date.now(),
       },
       {
-        id: `plan_gen_${Date.now()}`,
+        id: `plan_gen_${++msgCounterRef.current}`,
         role: 'system',
         content: `Analyzing repository intelligence and generating ${mode} implementation plan...`,
         timestamp: Date.now(),
@@ -467,10 +515,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       setActivePlan(plan);
       setScreen('plan');
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `plan_ok_${Date.now()}`,
+          id: `plan_ok_${++msgCounterRef.current}`,
           role: 'system',
           content: `Plan generated: "${plan.title}" (${plan.tasks.length} tasks, complexity: ${plan.estimatedComplexity}, risk: ${plan.risks.overallRisk}). Review and approve below.`,
           timestamp: Date.now(),
@@ -478,10 +526,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `err_${Date.now()}`,
+          id: `err_${++msgCounterRef.current}`,
           role: 'error',
           content: `Failed to generate plan: ${msg}`,
           recoveryHint: 'Ensure Ollama is running and has sufficient context window.',
@@ -500,10 +548,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
     switch (cmd) {
       case '/help':
-        setMessages((prev) => [
+        setStaticMessages((prev) => [
           ...prev,
           {
-            id: `sys_${Date.now()}`,
+            id: `sys_${++msgCounterRef.current}`,
             role: 'system',
             content: [
               'Evolve CLI Commands:',
@@ -537,10 +585,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       case '/output':
         setIsThinkingExpanded((prev) => {
           const next = !prev;
-          setMessages((m) => [
+          setStaticMessages((m) => [
             ...m,
             {
-              id: `sys_${Date.now()}`,
+              id: `sys_${++msgCounterRef.current}`,
               role: 'system',
               content: `Detailed output view (thinking & tool outputs) is now ${next ? 'EXPANDED' : 'COLLAPSED'}. (Shortcut: Ctrl+O)`,
               timestamp: Date.now(),
@@ -554,7 +602,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
       case '/models': {
         const models = await scanModelsAndHealth();
         if (arg.length > 0) {
-          // If argument is a number 1..N
           const num = parseInt(arg, 10);
           if (!isNaN(num) && num >= 1 && num <= models.length) {
             const chosen = models[num - 1];
@@ -563,7 +610,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               return;
             }
           }
-          // If argument is model name
           const matched = models.find(
             (m) =>
               m.name.toLowerCase() === arg.toLowerCase() ||
@@ -574,13 +620,13 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             return;
           }
         }
-        // Otherwise switch to interactive model selection screen
         setScreen('model_select');
         break;
       }
 
       case '/clear':
-        setMessages([]);
+        process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+        setStaticMessages([]);
         setScreen('chat');
         break;
 
@@ -588,9 +634,9 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         const newSid = context.createSession();
         setSessionId(newSid);
         runtimeRef.current = null;
-        setMessages([
+        setStaticMessages([
           {
-            id: `sys_${Date.now()}`,
+            id: `sys_${++msgCounterRef.current}`,
             role: 'system',
             content: `New session started: ${newSid}`,
             timestamp: Date.now(),
@@ -639,10 +685,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
               setActivePlan(plans[0] ?? null);
               setScreen('plan');
             } else {
-              setMessages((prev) => [
+              setStaticMessages((prev) => [
                 ...prev,
                 {
-                  id: `sys_${Date.now()}`,
+                  id: `sys_${++msgCounterRef.current}`,
                   role: 'system',
                   content:
                     'No active plan. Usage:\n  /plan <objective>\n  /plan quick <objective>\n  /plan detailed <objective>\n  /plan history\n  /plan approve [planId]\n  /plan reject [planId]',
@@ -664,10 +710,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         } else if (firstToken === 'approve') {
           const targetId = remainder || activePlan?.planId;
           if (!targetId) {
-            setMessages((prev) => [
+            setStaticMessages((prev) => [
               ...prev,
               {
-                id: `err_${Date.now()}`,
+                id: `err_${++msgCounterRef.current}`,
                 role: 'error',
                 content: 'Specify plan ID to approve: /plan approve <planId>',
                 timestamp: Date.now(),
@@ -680,10 +726,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           const targetId = remainder.split(/\s+/)[0] || activePlan?.planId;
           const reason = remainder.slice(targetId?.length ?? 0).trim() || undefined;
           if (!targetId) {
-            setMessages((prev) => [
+            setStaticMessages((prev) => [
               ...prev,
               {
-                id: `err_${Date.now()}`,
+                id: `err_${++msgCounterRef.current}`,
                 role: 'error',
                 content: 'Specify plan ID to reject: /plan reject <planId> [reason]',
                 timestamp: Date.now(),
@@ -694,10 +740,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           }
         } else if (firstToken === 'quick') {
           if (!remainder) {
-            setMessages((prev) => [
+            setStaticMessages((prev) => [
               ...prev,
               {
-                id: `err_${Date.now()}`,
+                id: `err_${++msgCounterRef.current}`,
                 role: 'error',
                 content: 'Please specify your objective: /plan quick <objective>',
                 timestamp: Date.now(),
@@ -708,10 +754,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           }
         } else if (firstToken === 'detailed') {
           if (!remainder) {
-            setMessages((prev) => [
+            setStaticMessages((prev) => [
               ...prev,
               {
-                id: `err_${Date.now()}`,
+                id: `err_${++msgCounterRef.current}`,
                 role: 'error',
                 content: 'Please specify your objective: /plan detailed <objective>',
                 timestamp: Date.now(),
@@ -721,7 +767,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             await handleCreatePlan(remainder, 'detailed');
           }
         } else {
-          // Default detailed mode with prompt
           await handleCreatePlan(subArg, 'detailed');
         }
         break;
@@ -734,10 +779,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         break;
 
       default:
-        setMessages((prev) => [
+        setStaticMessages((prev) => [
           ...prev,
           {
-            id: `err_${Date.now()}`,
+            id: `err_${++msgCounterRef.current}`,
             role: 'error',
             content: `Unknown command: "${cmdText}". Type /help for available commands.`,
             timestamp: Date.now(),
@@ -808,10 +853,10 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         ...(correction ? { correction } : {}),
         isTechnicallyCorrect: rating === 1,
       });
-      setMessages((prev) => [
+      setStaticMessages((prev) => [
         ...prev,
         {
-          id: `fb_${Date.now()}`,
+          id: `fb_${++msgCounterRef.current}`,
           role: 'system',
           content: `Feedback recorded: ${rating === 1 ? 'Correct (+1)' : rating === 0 ? 'Partially Correct (0)' : 'Incorrect (-1)'}${notes ? ` - "${notes}"` : ''}`,
           timestamp: Date.now(),
@@ -866,7 +911,15 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
   ];
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" paddingX={1} paddingY={0}>
+      {/* 1. Static History (Committed once to terminal scrollback, zero cursor jump, zero flicker) */}
+      <Static items={staticMessages}>
+        {(msg) => (
+          <MessageItem key={msg.id} message={msg} isThinkingExpanded={isThinkingExpanded} />
+        )}
+      </Static>
+
+      {/* 2. Compact 1-line header */}
       <Header
         projectName={context.rootDir.split('/').pop() || 'Evolve Project'}
         model={activeModel}
@@ -875,15 +928,59 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
         activeScreen={screen}
       />
 
-      {/* Main Screen Content */}
+      {/* 3. Live Active Area (strictly small and bounded in height) */}
       {screen === 'chat' && (
         <Box flexDirection="column">
-          {messages.map((msg) => (
-            <MessageItem key={msg.id} message={msg} isThinkingExpanded={isThinkingExpanded} />
-          ))}
+          {/* Active running tool call */}
+          {activeTool && (
+            <ToolExecution
+              toolName={activeTool.toolName}
+              args={activeTool.args}
+              status="running"
+              isExpanded={isThinkingExpanded}
+            />
+          )}
+
+          {/* Active streaming text */}
+          {streamingText.length > 0 && (
+            <Box paddingLeft={2} marginY={1}>
+              <MarkdownRenderer content={streamingText} />
+            </Box>
+          )}
+
+          {/* Tool Approval Modal Prompt */}
+          {pendingApproval && (
+            <ToolApprovalPrompt
+              toolName={pendingApproval.toolName}
+              parameters={pendingApproval.parameters}
+              onApprove={() => pendingApproval.resolve(true)}
+              onReject={() => pendingApproval.resolve(false)}
+              onCancel={() => pendingApproval.resolve(false)}
+            />
+          )}
+
+          {/* Human Feedback Modal Prompt */}
+          {showFeedback && (
+            <FeedbackPrompt
+              sessionId={sessionId}
+              onSubmit={handleFeedbackSubmit}
+              onCancel={() => setShowFeedback(false)}
+            />
+          )}
+
+          {/* Primary Input Box */}
+          {!pendingApproval && !showFeedback && (
+            <InputBox
+              onSubmit={handleUserPrompt}
+              isLoading={isLoading}
+              onCancel={handleCancel}
+              onToggleThinking={() => setIsThinkingExpanded((prev) => !prev)}
+            />
+          )}
         </Box>
       )}
 
+      {/* Secondary Screens */}
       {screen === 'model_select' && (
         <ModelSelectPrompt
           models={modelsList}
@@ -892,7 +989,7 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
           currentModel={activeModel}
           onSelect={selectModelAndStart}
           onCancel={() => {
-            if (messages.length > 1) {
+            if (staticMessages.length > 1) {
               setScreen('chat');
             } else {
               exit();
@@ -943,36 +1040,6 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
             }
           }}
           onClose={() => setScreen('chat')}
-        />
-      )}
-
-      {/* Tool Approval Modal Prompt */}
-      {pendingApproval && (
-        <ToolApprovalPrompt
-          toolName={pendingApproval.toolName}
-          parameters={pendingApproval.parameters}
-          onApprove={() => pendingApproval.resolve(true)}
-          onReject={() => pendingApproval.resolve(false)}
-          onCancel={() => pendingApproval.resolve(false)}
-        />
-      )}
-
-      {/* Human Feedback Modal Prompt */}
-      {showFeedback && (
-        <FeedbackPrompt
-          sessionId={sessionId}
-          onSubmit={handleFeedbackSubmit}
-          onCancel={() => setShowFeedback(false)}
-        />
-      )}
-
-      {/* Primary Input Box (Only visible when chatting and not prompting) */}
-      {screen === 'chat' && !pendingApproval && !showFeedback && (
-        <InputBox
-          onSubmit={handleUserPrompt}
-          isLoading={isLoading}
-          onCancel={handleCancel}
-          onToggleThinking={() => setIsThinkingExpanded((prev) => !prev)}
         />
       )}
     </Box>

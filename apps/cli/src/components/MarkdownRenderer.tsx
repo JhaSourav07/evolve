@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Theme } from './Theme.js';
+import { CodeBlock } from './CodeBlock.js';
 
 interface MarkdownRendererProps {
   content: string;
@@ -9,7 +10,7 @@ interface MarkdownRendererProps {
 /**
  * Tokenizes inline markdown: **bold**, *italic*, `code`, [link](url), and plain text.
  */
-interface InlineToken {
+export interface InlineToken {
   type: 'text' | 'bold' | 'italic' | 'code' | 'link';
   text: string;
   url?: string;
@@ -19,7 +20,6 @@ export function parseInlineTokens(line: string): InlineToken[] {
   const tokens: InlineToken[] = [];
   let remaining = line;
 
-  // Regex to match inline patterns in priority order
   const inlineRegex =
     /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(_([^_]+)_)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/;
 
@@ -35,19 +35,14 @@ export function parseInlineTokens(line: string): InlineToken[] {
     }
 
     if (match[2] !== undefined) {
-      // **bold**
       tokens.push({ type: 'bold', text: match[2] });
     } else if (match[4] !== undefined) {
-      // *italic*
       tokens.push({ type: 'italic', text: match[4] });
     } else if (match[6] !== undefined) {
-      // _italic_
       tokens.push({ type: 'italic', text: match[6] });
     } else if (match[8] !== undefined) {
-      // `code`
       tokens.push({ type: 'code', text: match[8] });
     } else if (match[10] !== undefined && match[11] !== undefined) {
-      // [text](url)
       tokens.push({ type: 'link', text: match[10], url: match[11] });
     }
 
@@ -78,13 +73,13 @@ export const FormattedInline: React.FC<{ text: string }> = ({ text }) => {
             );
           case 'code':
             return (
-              <Text key={idx} color={Theme.colors.accent} bold>
+              <Text key={idx} color={Theme.colors.silver} bold>
                 `{token.text}`
               </Text>
             );
           case 'link':
             return (
-              <Text key={idx} color={Theme.colors.user} underline>
+              <Text key={idx} color={Theme.colors.silver} underline>
                 {token.text}
               </Text>
             );
@@ -98,87 +93,9 @@ export const FormattedInline: React.FC<{ text: string }> = ({ text }) => {
 };
 
 /**
- * Basic syntax highlighting for code lines in terminal.
- */
-function highlightCodeLine(line: string, _lang?: string): React.ReactNode {
-  const trimmed = line.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('#')) {
-    return (
-      <Text color={Theme.colors.dim} italic>
-        {line}
-      </Text>
-    );
-  }
-
-  const parts: Array<{ text: string; isKeyword: boolean; isString: boolean }> = [];
-  let lastIndex = 0;
-
-  // Simple string and keyword matcher
-  const codeRegex =
-    /("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`|\b(const|let|var|function|class|interface|type|import|export|from|return|if|else|switch|case|default|for|while|do|break|continue|try|catch|finally|throw|new|async|await|public|private|protected|readonly|def|self|None|True|False|select|from|where|insert|update|delete)\b)/g;
-
-  let match: RegExpExecArray | null;
-  while ((match = codeRegex.exec(line)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({
-        text: line.slice(lastIndex, match.index),
-        isKeyword: false,
-        isString: false,
-      });
-    }
-
-    const matchedText = match[0];
-    const isStr =
-      matchedText.startsWith('"') || matchedText.startsWith("'") || matchedText.startsWith('`');
-
-    parts.push({
-      text: matchedText,
-      isKeyword: !isStr,
-      isString: isStr,
-    });
-
-    lastIndex = match.index + matchedText.length;
-  }
-
-  if (lastIndex < line.length) {
-    parts.push({
-      text: line.slice(lastIndex),
-      isKeyword: false,
-      isString: false,
-    });
-  }
-
-  if (parts.length === 0) {
-    return <Text color={Theme.colors.text}>{line}</Text>;
-  }
-
-  return parts.map((part, i) => {
-    if (part.isKeyword) {
-      return (
-        <Text key={i} color={Theme.colors.accent} bold>
-          {part.text}
-        </Text>
-      );
-    }
-    if (part.isString) {
-      return (
-        <Text key={i} color={Theme.colors.success}>
-          {part.text}
-        </Text>
-      );
-    }
-    return (
-      <Text key={i} color={Theme.colors.text}>
-        {part.text}
-      </Text>
-    );
-  });
-}
-
-/**
  * Markdown block types for structured rendering.
  */
-type MarkdownBlock =
+export type MarkdownBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'code_block'; lang: string; lines: string[] }
   | { type: 'horizontal_rule' }
@@ -203,7 +120,7 @@ export function parseMarkdownBlocks(rawContent: string): MarkdownBlock[] {
       const lang = trimmed.replace(/^```/, '').trim();
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !(lines[i]?.trim().startsWith('```'))) {
+      while (i < lines.length && !lines[i]?.trim().startsWith('```')) {
         codeLines.push(lines[i] ?? '');
         i++;
       }
@@ -328,10 +245,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
               return (
                 <Box key={index} flexDirection="column" marginTop={1} marginBottom={1}>
                   <Text color={Theme.colors.accent} bold>
-                    ✦ {block.text.toUpperCase()}
+                    {block.text.toUpperCase()}
                   </Text>
                   <Text color={Theme.colors.border}>
-                    {'═'.repeat(Math.min(65, block.text.length + 6))}
+                    {'─'.repeat(Math.min(60, block.text.length + 4))}
                   </Text>
                 </Box>
               );
@@ -339,11 +256,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             if (block.level === 2) {
               return (
                 <Box key={index} flexDirection="column" marginTop={1} marginBottom={0}>
-                  <Text color={Theme.colors.accent} bold>
+                  <Text color={Theme.colors.silver} bold>
                     ## {block.text}
-                  </Text>
-                  <Text color={Theme.colors.border}>
-                    {'─'.repeat(Math.min(50, block.text.length + 6))}
                   </Text>
                 </Box>
               );
@@ -351,7 +265,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             if (block.level === 3) {
               return (
                 <Box key={index} marginTop={1} marginBottom={0}>
-                  <Text color={Theme.colors.user} bold>
+                  <Text color={Theme.colors.text} bold>
                     ### {block.text}
                   </Text>
                 </Box>
@@ -359,46 +273,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             }
             return (
               <Box key={index} marginTop={0} marginBottom={0}>
-                <Text color={Theme.colors.tool} bold>
+                <Text color={Theme.colors.dim} bold>
                   {block.text}
                 </Text>
               </Box>
             );
           }
 
-          case 'code_block': {
-            return (
-              <Box
-                key={index}
-                flexDirection="column"
-                borderStyle="round"
-                borderColor={Theme.colors.border}
-                paddingX={1}
-                paddingY={0}
-                marginY={1}
-              >
-                {block.lang ? (
-                  <Box justifyContent="space-between" marginBottom={0}>
-                    <Text color={Theme.colors.tool} bold>
-                      [{block.lang}]
-                    </Text>
-                  </Box>
-                ) : null}
-                <Box flexDirection="column">
-                  {block.lines.map((line, lIdx) => (
-                    <Box key={lIdx}>
-                      {highlightCodeLine(line, block.lang)}
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            );
-          }
+          case 'code_block':
+            return <CodeBlock key={index} lines={block.lines} lang={block.lang} />;
 
           case 'horizontal_rule':
             return (
               <Box key={index} marginY={1}>
-                <Text color={Theme.colors.border}>{'─'.repeat(55)}</Text>
+                <Text color={Theme.colors.border}>{'─'.repeat(50)}</Text>
               </Box>
             );
 
@@ -411,7 +299,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
                 borderRight={false}
                 borderTop={false}
                 borderBottom={false}
-                borderColor={Theme.colors.accent}
+                borderColor={Theme.colors.dim}
                 paddingLeft={1}
                 marginY={0}
               >
@@ -422,7 +310,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           case 'bullet_item':
             return (
               <Box key={index} paddingLeft={block.indent * 2 + 1} marginY={0}>
-                <Text color={Theme.colors.accent}>• </Text>
+                <Text color={Theme.colors.dim}>• </Text>
                 <FormattedInline text={block.text} />
               </Box>
             );
@@ -430,7 +318,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
           case 'numbered_item':
             return (
               <Box key={index} paddingLeft={block.indent * 2 + 1} marginY={0}>
-                <Text color={Theme.colors.user} bold>
+                <Text color={Theme.colors.dim}>
                   {block.number}.{' '}
                 </Text>
                 <FormattedInline text={block.text} />
@@ -438,7 +326,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             );
 
           case 'table': {
-            // Compute max widths per column
             const numCols = block.headers.length;
             const colWidths = block.headers.map((h) => Math.min(30, Math.max(h.length, 6)));
 
@@ -454,39 +341,41 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             }
 
             return (
-              <Box
-                key={index}
-                flexDirection="column"
-                borderStyle="single"
-                borderColor={Theme.colors.border}
-                paddingX={1}
-                paddingY={0}
-                marginY={1}
-              >
+              <Box key={index} flexDirection="column" marginY={1} paddingLeft={1}>
                 {/* Header row */}
                 <Box>
-                  {block.headers.map((h, cIdx) => (
-                    <Box key={cIdx} width={(colWidths[cIdx] ?? 10) + 2}>
-                      <Text color={Theme.colors.accent} bold>
-                        {h}
-                      </Text>
+                  {block.headers.map((header, hIdx) => {
+                    const width = (colWidths[hIdx] ?? 10) + 2;
+                    return (
+                      <Box key={hIdx} width={width}>
+                        <Text color={Theme.colors.silver} bold>
+                          {header}
+                        </Text>
+                      </Box>
+                    );
+                  })}
+                </Box>
+
+                {/* Separator row */}
+                <Box>
+                  {colWidths.map((w, sIdx) => (
+                    <Box key={sIdx} width={w + 2}>
+                      <Text color={Theme.colors.border}>{'─'.repeat(w)}</Text>
                     </Box>
                   ))}
                 </Box>
-                {/* Divider */}
-                <Box>
-                  <Text color={Theme.colors.border}>
-                    {colWidths.map((w) => '─'.repeat(w + 1)).join('┼')}
-                  </Text>
-                </Box>
+
                 {/* Data rows */}
                 {block.rows.map((row, rIdx) => (
                   <Box key={rIdx}>
-                    {row.map((cell, cIdx) => (
-                      <Box key={cIdx} width={(colWidths[cIdx] ?? 10) + 2}>
-                        <FormattedInline text={cell} />
-                      </Box>
-                    ))}
+                    {row.map((cell, cIdx) => {
+                      const width = (colWidths[cIdx] ?? 10) + 2;
+                      return (
+                        <Box key={cIdx} width={width}>
+                          <Text color={Theme.colors.assistant}>{cell}</Text>
+                        </Box>
+                      );
+                    })}
                   </Box>
                 ))}
               </Box>

@@ -4,7 +4,7 @@ import { Theme } from './Theme.js';
 
 export interface FeedbackPromptProps {
   sessionId: string;
-  toolCallId?: string;
+  toolCallId?: string | undefined;
   onSubmit: (rating: number, notes?: string, correction?: string) => void;
   onCancel: () => void;
 }
@@ -48,25 +48,25 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({ onSubmit, onCanc
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
-      borderColor={Theme.colors.accent}
+      borderStyle="single"
+      borderColor={Theme.colors.border}
       paddingX={1}
       marginY={1}
     >
       <Box>
         <Text color={Theme.colors.accent} bold>
-          {Theme.icons.sparkle} Provide Interaction Feedback
+          Interaction Feedback
         </Text>
       </Box>
 
       {step === 'rating' ? (
         <Box flexDirection="column" marginY={1}>
-          <Text color={Theme.colors.text}>How was the agent response?</Text>
-          <Box marginTop={1}>
-            <Text color={Theme.colors.success}>[1] Correct (+1) </Text>
-            <Text color={Theme.colors.warning}> [2] Partially Correct (0) </Text>
-            <Text color={Theme.colors.error}> [3] Incorrect (-1) </Text>
-            <Text color={Theme.colors.dim}> [C] Cancel</Text>
+          <Text color={Theme.colors.text}>How was the response?</Text>
+          <Box marginTop={1} gap={2}>
+            <Text color={Theme.colors.success}>[1] Correct (+1)</Text>
+            <Text color={Theme.colors.warning}>[2] Partial (0)</Text>
+            <Text color={Theme.colors.error}>[3] Incorrect (-1)</Text>
+            <Text color={Theme.colors.dim}>[Esc] Cancel</Text>
           </Box>
         </Box>
       ) : (
@@ -80,12 +80,12 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({ onSubmit, onCanc
                 : 'Incorrect (-1)'}
           </Text>
           <Text color={Theme.colors.dim}>
-            Enter optional correction or notes (Press Enter to submit, Esc to cancel):
+            Correction / notes (Enter to submit, Esc to skip):
           </Text>
           <Box marginTop={1}>
-            <Text color={Theme.colors.accent}>&gt; </Text>
+            <Text color={Theme.colors.silver}>❯ </Text>
             <Text color={Theme.colors.text}>{notes}</Text>
-            <Text color={Theme.colors.accent}>_</Text>
+            <Text color={Theme.colors.silver}>_</Text>
           </Box>
         </Box>
       )}

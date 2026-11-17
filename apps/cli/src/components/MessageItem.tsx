@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { Theme } from './Theme.js';
 import { MarkdownRenderer } from './MarkdownRenderer.js';
+import { ToolExecution } from './ToolExecution.js';
 
 export interface ChatMessage {
   id: string;
@@ -21,7 +22,7 @@ export interface MessageItemProps {
   isThinkingExpanded?: boolean | undefined;
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({
+export const MessageItem: React.FC<MessageItemProps> = React.memo(({
   message,
   isThinkingExpanded = false,
 }) => {
@@ -31,11 +32,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         <Box flexDirection="column" marginY={1}>
           <Box>
             <Text color={Theme.colors.user} bold>
-              {Theme.icons.bullet} You
+              {Theme.icons.prompt}{' '}
             </Text>
-          </Box>
-          <Box paddingLeft={2}>
-            <Text color={Theme.colors.text}>{message.content}</Text>
+            <Text color={Theme.colors.user} bold>
+              {message.content}
+            </Text>
           </Box>
         </Box>
       );
@@ -44,47 +45,39 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       const lineCount = message.thinking ? message.thinking.split('\n').length : 0;
       return (
         <Box flexDirection="column" marginY={1}>
-          <Box>
-            <Text color={Theme.colors.accent} bold>
-              {Theme.icons.sparkle} Evolve
-            </Text>
-          </Box>
-
-          {/* Collapsible Thinking Process Block */}
+          {/* Collapsible Thinking Process */}
           {message.thinking && message.thinking.trim().length > 0 && (
             <Box marginY={0} paddingLeft={2} flexDirection="column">
               {isThinkingExpanded ? (
-                <Box
-                  flexDirection="column"
-                  borderStyle="single"
-                  borderColor={Theme.colors.border}
-                  paddingX={1}
-                  paddingY={0}
-                  marginY={0}
-                >
-                  <Box justifyContent="space-between">
-                    <Text color={Theme.colors.accent} bold>
-                      💭 Thought Process ({lineCount} lines)
-                    </Text>
-                    <Text color={Theme.colors.dim} dimColor>
-                      Ctrl+O to collapse
+                <Box flexDirection="column" marginY={0}>
+                  <Box>
+                    <Text color={Theme.colors.dim} bold>
+                      Thinking ({lineCount} lines • Ctrl+O to collapse):
                     </Text>
                   </Box>
-                  <Box marginTop={0}>
-                    <Text color={Theme.colors.dim} italic>
-                      {message.thinking}
-                    </Text>
+                  <Box flexDirection="column" paddingLeft={1} marginTop={0}>
+                    {message.thinking.split('\n').map((line, idx) => (
+                      <Box key={idx}>
+                        <Text color={Theme.colors.dim} dimColor>
+                          {Theme.icons.bar}{' '}
+                        </Text>
+                        <Text color={Theme.colors.dim} italic>
+                          {line}
+                        </Text>
+                      </Box>
+                    ))}
                   </Box>
                 </Box>
               ) : (
-                <Text color={Theme.colors.dim} italic>
-                  💭 Thought process ({lineCount} lines hidden • Ctrl+O to expand)
+                <Text color={Theme.colors.dim} dimColor>
+                  Thinking ({lineCount} lines • Ctrl+O to expand)
                 </Text>
               )}
             </Box>
           )}
 
-          <Box paddingLeft={2} marginTop={message.thinking ? 1 : 0}>
+          {/* Formatted Markdown Content */}
+          <Box paddingLeft={message.thinking ? 2 : 0} marginTop={message.thinking ? 1 : 0}>
             <MarkdownRenderer content={message.content} />
           </Box>
         </Box>
@@ -93,105 +86,38 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
     case 'tool_call':
       return (
-        <Box paddingLeft={2} marginY={0}>
-          <Text color={Theme.colors.tool}>
-            {Theme.icons.tool} {message.toolName}
-          </Text>
-          {message.toolArgs && (
-            <Text color={Theme.colors.dim}>
-              {' '}
-              (
-              {Object.entries(message.toolArgs)
-                .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-                .join(', ')}
-              )
-            </Text>
-          )}
-        </Box>
+        <ToolExecution
+          toolName={message.toolName ?? 'tool'}
+          args={message.toolArgs}
+          status="running"
+          isExpanded={isThinkingExpanded}
+        />
       );
 
-    case 'tool_result': {
-      const isSuccess = message.toolSuccess ?? true;
-      const duration = message.toolDurationMs ? ` (${message.toolDurationMs}ms)` : '';
-      const lines = message.content ? message.content.trim().split('\n') : [];
-      const lineCount = lines.length;
-      const isMultiLine = lineCount > 1 || message.content.length > 80;
-
-      if (!isMultiLine) {
-        return (
-          <Box paddingLeft={4} marginY={0}>
-            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error}>
-              {isSuccess ? Theme.icons.check : Theme.icons.cross}
-            </Text>
-            <Text color={Theme.colors.dim}>
-              {' '}
-              {isSuccess ? 'Completed' : 'Failed'}
-              {duration}: {message.content}
-            </Text>
-          </Box>
-        );
-      }
-
-      // Multi-line output (like read_file, list_files, run_command)
-      // When collapsed: show compact summary with line/item count and Ctrl+O hint
-      if (!isThinkingExpanded) {
-        const countLabel =
-          message.toolName === 'list_files' ? `${lineCount} items` : `${lineCount} lines`;
-        return (
-          <Box paddingLeft={4} marginY={0}>
-            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error}>
-              {isSuccess ? Theme.icons.check : Theme.icons.cross}
-            </Text>
-            <Text color={Theme.colors.dim}>
-              {' '}
-              {isSuccess ? 'Completed' : 'Failed'}
-              {duration} ({countLabel} hidden • Ctrl+O to expand)
-            </Text>
-          </Box>
-        );
-      }
-
-      // When expanded (isThinkingExpanded === true): show full content in a bordered box
+    case 'tool_result':
       return (
-        <Box
-          flexDirection="column"
-          borderStyle="single"
-          borderColor={Theme.colors.border}
-          paddingX={1}
-          paddingY={0}
-          marginLeft={4}
-          marginY={0}
-        >
-          <Box justifyContent="space-between">
-            <Text color={isSuccess ? Theme.colors.success : Theme.colors.error} bold>
-              {isSuccess ? Theme.icons.check : Theme.icons.cross} {message.toolName || 'Tool'}{' '}
-              Output ({lineCount} lines){duration}
-            </Text>
-            <Text color={Theme.colors.dim} dimColor>
-              Ctrl+O to collapse
-            </Text>
-          </Box>
-          <Box marginTop={0}>
-            <Text color={Theme.colors.dim}>{message.content}</Text>
-          </Box>
-        </Box>
+        <ToolExecution
+          toolName={message.toolName ?? 'tool'}
+          status={message.toolSuccess === false ? 'failed' : 'completed'}
+          output={message.toolSuccess === false ? undefined : message.content}
+          error={message.toolSuccess === false ? message.content : undefined}
+          durationMs={message.toolDurationMs}
+          isExpanded={isThinkingExpanded}
+        />
       );
-    }
 
     case 'error':
       return (
-        <Box
-          flexDirection="column"
-          borderStyle="round"
-          borderColor={Theme.colors.error}
-          paddingX={1}
-          marginY={1}
-        >
-          <Text color={Theme.colors.error} bold>
-            {Theme.icons.cross} Error: {message.content}
-          </Text>
+        <Box flexDirection="column" marginY={1} paddingLeft={1}>
+          <Box>
+            <Text color={Theme.colors.error} bold>
+              {Theme.icons.cross} Error: {message.content}
+            </Text>
+          </Box>
           {message.recoveryHint && (
-            <Text color={Theme.colors.warning}>Recovery Suggestion: {message.recoveryHint}</Text>
+            <Box paddingLeft={2}>
+              <Text color={Theme.colors.dim}>Suggestion: {message.recoveryHint}</Text>
+            </Box>
           )}
         </Box>
       );
@@ -199,11 +125,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     case 'system':
     default:
       return (
-        <Box paddingLeft={2} marginY={0}>
-          <Text color={Theme.colors.dim} italic>
-            {message.content}
+        <Box paddingLeft={1} marginY={0}>
+          <Text color={Theme.colors.dim}>
+            {Theme.icons.bulletOpen} {message.content}
           </Text>
         </Box>
       );
   }
-};
+});
+
+MessageItem.displayName = 'MessageItem';

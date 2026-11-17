@@ -30,17 +30,16 @@ export const ToolApprovalPrompt: React.FC<ToolApprovalPromptProps> = ({
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
+      borderStyle="single"
       borderColor={Theme.colors.warning}
       paddingX={1}
       marginY={1}
     >
       <Box>
         <Text color={Theme.colors.warning} bold>
-          {Theme.icons.shield} Action Requires Approval:
+          Approval Required:{' '}
         </Text>
         <Text color={Theme.colors.text} bold>
-          {' '}
           {toolName}
         </Text>
       </Box>
@@ -48,7 +47,7 @@ export const ToolApprovalPrompt: React.FC<ToolApprovalPromptProps> = ({
       <Box paddingLeft={2} marginY={1} flexDirection="column">
         {Object.entries(parameters).map(([key, value]) => (
           <Box key={key}>
-            <Text color={Theme.colors.accent}>{key}: </Text>
+            <Text color={Theme.colors.silver}>{key}: </Text>
             <Text color={Theme.colors.text}>
               {typeof value === 'string' ? value : JSON.stringify(value)}
             </Text>
@@ -56,16 +55,15 @@ export const ToolApprovalPrompt: React.FC<ToolApprovalPromptProps> = ({
         ))}
       </Box>
 
-      <Box>
-        <Text color={Theme.colors.dim}>Press </Text>
+      <Box gap={1}>
         <Text color={Theme.colors.success} bold>
           [Y] Approve
         </Text>
-        <Text color={Theme.colors.dim}> • </Text>
+        <Text color={Theme.colors.dim}>•</Text>
         <Text color={Theme.colors.error} bold>
           [N] Reject
         </Text>
-        <Text color={Theme.colors.dim}> • </Text>
+        <Text color={Theme.colors.dim}>•</Text>
         <Text color={Theme.colors.dim} bold>
           [C] Cancel
         </Text>
