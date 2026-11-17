@@ -5,4 +5,5 @@ export * from './verification/index.js';
 export * from './debugging/index.js';
 export * from './execution/index.js';
 export * from './memory/index.js';
+export * from './evaluation/index.js';
 export * from './examples/minimal-agent.js';
