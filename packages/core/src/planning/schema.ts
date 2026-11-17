@@ -13,6 +13,9 @@ export const PlanStatusSchema = z.enum([
   'draft',
   'awaiting_approval',
   'approved',
+  'in_progress',
+  'completed',
+  'failed',
   'rejected',
   'superseded',
 ]);
@@ -21,6 +24,7 @@ export type PlanStatus = z.infer<typeof PlanStatusSchema>;
 export const TaskStatusSchema = z.enum([
   'pending',
   'ready',
+  'running',
   'blocked',
   'completed',
   'failed',

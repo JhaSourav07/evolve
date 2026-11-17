@@ -108,6 +108,98 @@ export const PlanRegeneratedPayloadSchema = z.object({
   feedback: z.string().optional(),
 });
 
+export const ExecutionStartedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  sessionId: z.string().min(1),
+  totalTasks: z.number().int().nonnegative(),
+  mode: z.enum(['quick', 'detailed']).default('detailed'),
+});
+
+export const TaskStartedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  taskIndex: z.number().int().nonnegative(),
+  title: z.string().min(1),
+  riskLevel: z.string().default('low'),
+});
+
+export const ToolCallRequestedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  toolName: z.string().min(1),
+  args: z.record(z.string(), z.unknown()),
+});
+
+export const ToolExecutionStartedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  toolName: z.string().min(1),
+  toolCallId: z.string().min(1),
+});
+
+export const ToolExecutionCompletedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  toolName: z.string().min(1),
+  toolCallId: z.string().min(1),
+  durationMs: z.number().nonnegative(),
+  success: z.boolean(),
+  outputSummary: z.string().optional(),
+});
+
+export const ToolExecutionFailedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  toolName: z.string().min(1),
+  toolCallId: z.string().min(1),
+  error: z.string().min(1),
+});
+
+export const VerificationStartedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  stage: z.string().min(1),
+});
+
+export const VerificationCompletedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  stage: z.string().min(1),
+  success: z.boolean(),
+  durationMs: z.number().nonnegative(),
+  error: z.string().optional(),
+});
+
+export const TaskCompletedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  durationMs: z.number().nonnegative(),
+  filesModified: z.array(z.string()).default([]),
+});
+
+export const TaskFailedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  taskId: z.string().min(1),
+  error: z.string().min(1),
+  recoverable: z.boolean().default(false),
+});
+
+export const ExecutionCancelledPayloadSchema = z.object({
+  planId: z.string().min(1),
+  reason: z.string().min(1),
+  completedTasks: z.number().int().nonnegative(),
+  remainingTasks: z.number().int().nonnegative(),
+});
+
+export const ExecutionCompletedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  sessionId: z.string().min(1),
+  success: z.boolean(),
+  durationMs: z.number().nonnegative(),
+  tasksCompleted: z.number().int().nonnegative(),
+  tasksFailed: z.number().int().nonnegative(),
+});
+
 export const EventSchemas = {
   user_prompt: UserPromptPayloadSchema,
   assistant_response: AssistantResponsePayloadSchema,
@@ -125,6 +217,18 @@ export const EventSchemas = {
   plan_approved: PlanApprovedPayloadSchema,
   plan_rejected: PlanRejectedPayloadSchema,
   plan_regenerated: PlanRegeneratedPayloadSchema,
+  execution_started: ExecutionStartedPayloadSchema,
+  task_started: TaskStartedPayloadSchema,
+  tool_call_requested: ToolCallRequestedPayloadSchema,
+  tool_execution_started: ToolExecutionStartedPayloadSchema,
+  tool_execution_completed: ToolExecutionCompletedPayloadSchema,
+  tool_execution_failed: ToolExecutionFailedPayloadSchema,
+  verification_started: VerificationStartedPayloadSchema,
+  verification_completed: VerificationCompletedPayloadSchema,
+  task_completed: TaskCompletedPayloadSchema,
+  task_failed: TaskFailedPayloadSchema,
+  execution_cancelled: ExecutionCancelledPayloadSchema,
+  execution_completed: ExecutionCompletedPayloadSchema,
 } as const;
 
 export type CoreEventType = keyof typeof EventSchemas;

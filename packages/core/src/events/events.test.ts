@@ -34,6 +34,55 @@ describe('Event Schemas & Validation', () => {
     expect(result.exitCode).toBe(0);
     expect(result.durationMs).toBe(420);
   });
+
+  it('validates execution lifecycle events correctly', () => {
+    const execStarted = validateEventPayload('execution_started', {
+      planId: 'plan_1',
+      sessionId: 'sess_1',
+      totalTasks: 3,
+      mode: 'detailed',
+    });
+    expect(execStarted.totalTasks).toBe(3);
+
+    const taskStarted = validateEventPayload('task_started', {
+      planId: 'plan_1',
+      taskId: 'task_1',
+      taskIndex: 0,
+      title: 'Initialize auth',
+      riskLevel: 'low',
+    });
+    expect(taskStarted.taskId).toBe('task_1');
+
+    const toolExecution = validateEventPayload('tool_execution_completed', {
+      planId: 'plan_1',
+      taskId: 'task_1',
+      toolName: 'write_file',
+      toolCallId: 'call_1',
+      durationMs: 45,
+      success: true,
+      outputSummary: 'Wrote 120 bytes',
+    });
+    expect(toolExecution.success).toBe(true);
+
+    const verifCompleted = validateEventPayload('verification_completed', {
+      planId: 'plan_1',
+      taskId: 'task_1',
+      stage: 'typecheck',
+      success: true,
+      durationMs: 250,
+    });
+    expect(verifCompleted.stage).toBe('typecheck');
+
+    const execCompleted = validateEventPayload('execution_completed', {
+      planId: 'plan_1',
+      sessionId: 'sess_1',
+      success: true,
+      durationMs: 1500,
+      tasksCompleted: 3,
+      tasksFailed: 0,
+    });
+    expect(execCompleted.tasksCompleted).toBe(3);
+  });
 });
 
 describe('InMemoryEventBus', () => {

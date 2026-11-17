@@ -21,5 +21,6 @@ export * from './model/index.js';
 export * from './tools/index.js';
 export * from './events/index.js';
 export * from './planning/index.js';
+export * from './execution/index.js';
 export * from './logger/index.js';
 export * from './utils/index.js';
