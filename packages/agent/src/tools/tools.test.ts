@@ -5,7 +5,10 @@ import { createSessionId, noopLogger, type ToolExecutionContext } from '@evolve/
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCommandTool, runTestsTool } from './execution.js';
 import {
+  createFileTool,
+  deleteFileTool,
   editFileTool,
+  getFileDiffTool,
   listFilesTool,
   readFileTool,
   searchCodeTool,
@@ -35,12 +38,15 @@ describe('Evolve Tool Execution Package', () => {
   });
 
   describe('ToolRegistry', () => {
-    it('creates default registry with all 15 tools registered', () => {
+    it('creates default registry with all 18 tools registered', () => {
       const registry = createDefaultToolRegistry();
-      expect(registry.list().length).toBe(15);
+      expect(registry.list().length).toBe(18);
       expect(registry.has('read_file')).toBe(true);
       expect(registry.has('write_file')).toBe(true);
+      expect(registry.has('create_file')).toBe(true);
       expect(registry.has('edit_file')).toBe(true);
+      expect(registry.has('delete_file')).toBe(true);
+      expect(registry.has('get_file_diff')).toBe(true);
       expect(registry.has('list_files')).toBe(true);
       expect(registry.has('search_code')).toBe(true);
       expect(registry.has('run_command')).toBe(true);
@@ -55,7 +61,7 @@ describe('Evolve Tool Execution Package', () => {
       expect(registry.has('get_related_files')).toBe(true);
 
       const definitions = registry.toModelDefinitions();
-      expect(definitions.length).toBe(15);
+      expect(definitions.length).toBe(18);
       for (const def of definitions) {
         expect(def.name).toBeDefined();
         expect(def.description).toBeDefined();
@@ -243,6 +249,84 @@ describe('Evolve Tool Execution Package', () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe('APPROVAL_DENIED');
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('let safe = true;');
+    });
+  });
+
+  describe('create_file tool', () => {
+    it('creates a new file when it does not exist', async () => {
+      const res = await createFileTool.execute(
+        { path: 'new-file.ts', content: 'export const x = 1;' },
+        mockContext,
+      );
+      expect(res.success).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'new-file.ts'))).toBe(true);
+      expect(fs.readFileSync(path.join(tmpDir, 'new-file.ts'), 'utf-8')).toBe('export const x = 1;');
+    });
+
+    it('fails when target file already exists', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'existing.txt'), 'already here', 'utf-8');
+      const res = await createFileTool.execute(
+        { path: 'existing.txt', content: 'new content' },
+        mockContext,
+      );
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('FILE_EXISTS');
+      expect(fs.readFileSync(path.join(tmpDir, 'existing.txt'), 'utf-8')).toBe('already here');
+    });
+
+    it('rejects creation outside workspace', async () => {
+      const res = await createFileTool.execute(
+        { path: '../outside.txt', content: 'evil' },
+        mockContext,
+      );
+      expect(res.success).toBe(false);
+      expect(res.output).toContain('Path traversal attempt detected');
+    });
+  });
+
+  describe('delete_file tool', () => {
+    it('deletes an existing file', async () => {
+      const filePath = path.join(tmpDir, 'to-delete.txt');
+      fs.writeFileSync(filePath, 'bye', 'utf-8');
+
+      const res = await deleteFileTool.execute({ path: 'to-delete.txt' }, mockContext);
+      expect(res.success).toBe(true);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+
+    it('fails when file does not exist', async () => {
+      const res = await deleteFileTool.execute({ path: 'nonexistent.txt' }, mockContext);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('FILE_NOT_FOUND');
+    });
+
+    it('prevents deleting workspace root', async () => {
+      const res = await deleteFileTool.execute({ path: '.' }, mockContext);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('CANNOT_DELETE_WORKSPACE_ROOT');
+    });
+
+    it('respects approval denial', async () => {
+      const filePath = path.join(tmpDir, 'protected.txt');
+      fs.writeFileSync(filePath, 'keep me', 'utf-8');
+
+      const contextWithDenial: ToolExecutionContext = {
+        ...mockContext,
+        requestApproval: async () => false,
+      };
+
+      const res = await deleteFileTool.execute({ path: 'protected.txt' }, contextWithDenial);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('APPROVAL_DENIED');
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+  });
+
+  describe('get_file_diff tool', () => {
+    it('returns empty diff or no changes for clean file', async () => {
+      const res = await getFileDiffTool.execute({ path: 'missing.ts' }, mockContext);
+      expect(res.success).toBe(true);
+      expect(res.data?.hasChanges).toBe(false);
     });
   });
 

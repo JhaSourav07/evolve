@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { AgentTool } from '@evolve/core';
 import { createExclusionFilter } from '@evolve/indexer';
 import { z } from 'zod';
+import { execGit } from './git.js';
 import { assertSafePath, checkApproval } from './security.js';
 
 const BINARY_EXTENSIONS = new Set([
@@ -524,6 +525,235 @@ export const searchCodeTool: AgentTool<
       return {
         success: false,
         output: `Failed to search code for '${query}': ${err instanceof Error ? err.message : String(err)}`,
+        error: String(err),
+      };
+    }
+  },
+};
+
+export const createFileTool: AgentTool<
+  { path: string; content?: string | undefined },
+  { path: string; bytesWritten: number }
+> = {
+  definition: {
+    name: 'create_file',
+    description:
+      'Creates a new file at the specified relative path with optional initial content. Fails if the file already exists to prevent accidental overwrites.',
+    parameters: z.object({
+      path: z.string().min(1).describe('Relative path of the new file to create'),
+      content: z.string().optional().describe('Initial content of the file (defaults to empty string)'),
+    }),
+  },
+  async execute({ path: targetPath, content = '' }, context) {
+    try {
+      const safePath = assertSafePath(targetPath, context.workspaceRoot);
+
+      if (fs.existsSync(safePath)) {
+        return {
+          success: false,
+          output: `Cannot create file: '${targetPath}' already exists. Use write_file or edit_file to modify existing files.`,
+          error: 'FILE_EXISTS',
+        };
+      }
+
+      const approval = await checkApproval(
+        'create_file',
+        `Create new file '${targetPath}'`,
+        { path: targetPath, contentLength: content.length },
+        context,
+      );
+
+      if (!approval.approved) {
+        return {
+          success: false,
+          output: approval.reason ?? `Creation of file '${targetPath}' was rejected.`,
+          error: 'APPROVAL_DENIED',
+        };
+      }
+
+      const parentDir = path.dirname(safePath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+
+      fs.writeFileSync(safePath, content, 'utf-8');
+
+      return {
+        success: true,
+        output: `Successfully created file '${targetPath}' (${content.length} characters).`,
+        data: {
+          path: targetPath,
+          bytesWritten: content.length,
+        },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: `Failed to create file '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
+        error: String(err),
+      };
+    }
+  },
+};
+
+export const deleteFileTool: AgentTool<
+  { path: string; recursive?: boolean | undefined },
+  { path: string; deleted: boolean }
+> = {
+  definition: {
+    name: 'delete_file',
+    description:
+      'Deletes a file or directory within the workspace root. Requires explicit approval before deletion.',
+    parameters: z.object({
+      path: z.string().min(1).describe('Relative path of the file or directory to delete'),
+      recursive: z
+        .boolean()
+        .optional()
+        .describe('Whether to recursively delete directories (default false)'),
+    }),
+  },
+  async execute({ path: targetPath, recursive = false }, context) {
+    try {
+      const safePath = assertSafePath(targetPath, context.workspaceRoot);
+
+      // Prevent deletion of workspace root
+      if (path.resolve(safePath) === path.resolve(context.workspaceRoot)) {
+        return {
+          success: false,
+          output: 'Cannot delete the workspace root directory.',
+          error: 'CANNOT_DELETE_WORKSPACE_ROOT',
+        };
+      }
+
+      if (!fs.existsSync(safePath)) {
+        return {
+          success: false,
+          output: `File or directory not found: '${targetPath}'`,
+          error: 'FILE_NOT_FOUND',
+        };
+      }
+
+      const stat = fs.statSync(safePath);
+      const isDir = stat.isDirectory();
+
+      if (isDir && !recursive) {
+        const entries = fs.readdirSync(safePath);
+        if (entries.length > 0) {
+          return {
+            success: false,
+            output: `Directory '${targetPath}' is not empty. Set recursive: true to delete.`,
+            error: 'DIRECTORY_NOT_EMPTY',
+          };
+        }
+      }
+
+      const approval = await checkApproval(
+        'delete_file',
+        `Delete ${isDir ? 'directory' : 'file'} '${targetPath}'`,
+        { path: targetPath, isDirectory: isDir, recursive },
+        context,
+      );
+
+      if (!approval.approved) {
+        return {
+          success: false,
+          output: approval.reason ?? `Deletion of '${targetPath}' was rejected.`,
+          error: 'APPROVAL_DENIED',
+        };
+      }
+
+      fs.rmSync(safePath, { recursive, force: true });
+
+      return {
+        success: true,
+        output: `Successfully deleted ${isDir ? 'directory' : 'file'} '${targetPath}'.`,
+        data: {
+          path: targetPath,
+          deleted: true,
+        },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: `Failed to delete '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
+        error: String(err),
+      };
+    }
+  },
+};
+
+export const getFileDiffTool: AgentTool<
+  { path: string; staged?: boolean | undefined },
+  { path: string; diff: string; hasChanges: boolean }
+> = {
+  definition: {
+    name: 'get_file_diff',
+    description:
+      'Generates a unified diff for a file against git HEAD or the staged index to inspect changes before committing.',
+    parameters: z.object({
+      path: z.string().min(1).describe('Relative path of the file to inspect diff for'),
+      staged: z
+        .boolean()
+        .optional()
+        .describe('Whether to diff staged changes (default false, diffs working tree against HEAD)'),
+    }),
+  },
+  async execute({ path: targetPath, staged = false }, context) {
+    try {
+      const safePath = assertSafePath(targetPath, context.workspaceRoot);
+      const relPath = path.relative(context.workspaceRoot, safePath).replace(/\\/g, '/');
+
+      // Attempt git diff
+      const diffArgs = staged
+        ? ['diff', '--cached', '--', relPath]
+        : ['diff', 'HEAD', '--', relPath];
+
+      const res = await execGit(context.workspaceRoot, diffArgs);
+
+      if (res.exitCode === 0 && res.stdout.trim().length > 0) {
+        return {
+          success: true,
+          output: res.stdout,
+          data: {
+            path: targetPath,
+            diff: res.stdout,
+            hasChanges: true,
+          },
+        };
+      }
+
+      // Check if file is untracked
+      const statusRes = await execGit(context.workspaceRoot, ['status', '--porcelain=v1', '--', relPath]);
+      if (statusRes.exitCode === 0 && statusRes.stdout.trim().startsWith('??')) {
+        const content = fs.existsSync(safePath) ? fs.readFileSync(safePath, 'utf-8') : '';
+        const lines = content.split('\n');
+        const diffHeader = `--- /dev/null\n+++ b/${relPath}\n@@ -0,0 +1,${lines.length} @@\n`;
+        const diffBody = lines.map((l) => `+${l}`).join('\n');
+        const fullDiff = diffHeader + diffBody;
+        return {
+          success: true,
+          output: fullDiff,
+          data: {
+            path: targetPath,
+            diff: fullDiff,
+            hasChanges: true,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        output: `No changes detected for '${targetPath}'.`,
+        data: {
+          path: targetPath,
+          diff: '',
+          hasChanges: false,
+        },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: `Failed to get diff for '${targetPath}': ${err instanceof Error ? err.message : String(err)}`,
         error: String(err),
       };
     }

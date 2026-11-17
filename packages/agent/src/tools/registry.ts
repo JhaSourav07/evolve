@@ -2,7 +2,10 @@ import type { AgentTool, ModelToolDefinition } from '@evolve/core';
 import { z } from 'zod';
 import { runCommandTool, runTestsTool } from './execution.js';
 import {
+  createFileTool,
+  deleteFileTool,
   editFileTool,
+  getFileDiffTool,
   listFilesTool,
   readFileTool,
   searchCodeTool,
@@ -56,7 +59,10 @@ export class ToolRegistry {
       // Filesystem & Exploration Tools
       readFileTool as AgentTool<unknown, unknown>,
       writeFileTool as AgentTool<unknown, unknown>,
+      createFileTool as AgentTool<unknown, unknown>,
       editFileTool as AgentTool<unknown, unknown>,
+      deleteFileTool as AgentTool<unknown, unknown>,
+      getFileDiffTool as AgentTool<unknown, unknown>,
       listFilesTool as AgentTool<unknown, unknown>,
       searchCodeTool as AgentTool<unknown, unknown>,
 
