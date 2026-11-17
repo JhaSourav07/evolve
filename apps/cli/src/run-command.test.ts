@@ -62,3 +62,4 @@ describe('Run Command Tests', () => {
     consoleLogSpy.mockRestore();
   });
 });
+
