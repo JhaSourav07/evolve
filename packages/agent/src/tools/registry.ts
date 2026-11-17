@@ -11,7 +11,14 @@ import {
   searchCodeTool,
   writeFileTool,
 } from './filesystem.js';
-import { gitDiffTool, gitStatusTool } from './git.js';
+import {
+  gitAddTool,
+  gitBranchTool,
+  gitCommitTool,
+  gitDiffTool,
+  gitLogTool,
+  gitStatusTool,
+} from './git.js';
 import {
   findReferencesTool,
   findSymbolTool,
@@ -73,6 +80,10 @@ export class ToolRegistry {
       // Git Tools
       gitStatusTool as AgentTool<unknown, unknown>,
       gitDiffTool as AgentTool<unknown, unknown>,
+      gitLogTool as AgentTool<unknown, unknown>,
+      gitBranchTool as AgentTool<unknown, unknown>,
+      gitAddTool as AgentTool<unknown, unknown>,
+      gitCommitTool as AgentTool<unknown, unknown>,
     ];
 
     for (const tool of defaultTools) {

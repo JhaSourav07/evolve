@@ -14,7 +14,15 @@ import {
   searchCodeTool,
   writeFileTool,
 } from './filesystem.js';
-import { execGit, gitDiffTool, gitStatusTool } from './git.js';
+import {
+  execGit,
+  gitAddTool,
+  gitBranchTool,
+  gitCommitTool,
+  gitDiffTool,
+  gitLogTool,
+  gitStatusTool,
+} from './git.js';
 import { createDefaultToolRegistry } from './registry.js';
 import { classifyCommandRisk, isSensitiveFile, scrubSecrets } from './security.js';
 
@@ -38,9 +46,9 @@ describe('Evolve Tool Execution Package', () => {
   });
 
   describe('ToolRegistry', () => {
-    it('creates default registry with all 18 tools registered', () => {
+    it('creates default registry with all 22 tools registered', () => {
       const registry = createDefaultToolRegistry();
-      expect(registry.list().length).toBe(18);
+      expect(registry.list().length).toBe(22);
       expect(registry.has('read_file')).toBe(true);
       expect(registry.has('write_file')).toBe(true);
       expect(registry.has('create_file')).toBe(true);
@@ -53,6 +61,10 @@ describe('Evolve Tool Execution Package', () => {
       expect(registry.has('run_tests')).toBe(true);
       expect(registry.has('git_status')).toBe(true);
       expect(registry.has('git_diff')).toBe(true);
+      expect(registry.has('git_log')).toBe(true);
+      expect(registry.has('git_branch')).toBe(true);
+      expect(registry.has('git_add')).toBe(true);
+      expect(registry.has('git_commit')).toBe(true);
       expect(registry.has('inspect_project')).toBe(true);
       expect(registry.has('get_project_structure')).toBe(true);
       expect(registry.has('find_symbol')).toBe(true);
@@ -61,7 +73,7 @@ describe('Evolve Tool Execution Package', () => {
       expect(registry.has('get_related_files')).toBe(true);
 
       const definitions = registry.toModelDefinitions();
-      expect(definitions.length).toBe(18);
+      expect(definitions.length).toBe(22);
       for (const def of definitions) {
         expect(def.name).toBeDefined();
         expect(def.description).toBeDefined();
@@ -549,6 +561,38 @@ describe('Evolve Tool Execution Package', () => {
       const injectionRes = await gitDiffTool.execute({ path: '--upload-pack' }, mockContext);
       // '--' was safely passed as path operand, not as flag
       expect(injectionRes.success).toBe(true);
+
+      // 5. git_add staging
+      const addRes = await gitAddTool.execute({ files: ['untracked.txt'] }, mockContext);
+      expect(addRes.success).toBe(true);
+      expect(addRes.data?.stagedFiles).toContain('untracked.txt');
+
+      // 6. git_commit
+      const commitRes = await gitCommitTool.execute(
+        { message: 'feat: add untracked file' },
+        mockContext,
+      );
+      expect(commitRes.success).toBe(true);
+      expect(commitRes.data?.commitHash).toBeDefined();
+      expect(commitRes.data?.filesCommitted).toBeGreaterThan(0);
+
+      // 7. git_log
+      const logRes = await gitLogTool.execute({ maxCount: 5 }, mockContext);
+      expect(logRes.success).toBe(true);
+      expect(logRes.data?.count).toBe(2);
+      expect(logRes.output).toContain('feat: add untracked file');
+
+      // 8. git_branch
+      const branchRes = await gitBranchTool.execute({ action: 'create', name: 'feat/auth' }, mockContext);
+      expect(branchRes.success).toBe(true);
+      expect(branchRes.data?.currentBranch).toBe('feat/auth');
+      expect(branchRes.data?.branches).toContain('feat/auth');
+
+      // 9. Sensitive file staging protection
+      fs.writeFileSync(path.join(tmpDir, '.env'), 'SECRET=bad', 'utf-8');
+      const badAddRes = await gitAddTool.execute({ files: ['.env'] }, mockContext);
+      expect(badAddRes.success).toBe(false);
+      expect(badAddRes.output).toContain('Access to sensitive file is blocked');
     });
   });
 });
