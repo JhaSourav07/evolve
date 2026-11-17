@@ -200,6 +200,41 @@ export const ExecutionCompletedPayloadSchema = z.object({
   tasksFailed: z.number().int().nonnegative(),
 });
 
+export const MemoryCreatedPayloadSchema = z.object({
+  memoryId: z.string().min(1),
+  category: z.string().min(1),
+  key: z.string().min(1),
+  projectId: z.string().optional(),
+  confidence: z.number().min(0).max(1),
+  status: z.string().min(1),
+});
+
+export const MemoryUpdatedPayloadSchema = z.object({
+  memoryId: z.string().min(1),
+  category: z.string().min(1),
+  key: z.string().min(1),
+  reason: z.string().optional(),
+});
+
+export const MemoryRetrievedPayloadSchema = z.object({
+  query: z.string(),
+  projectId: z.string().optional(),
+  memoryIds: z.array(z.string()),
+  count: z.number().int().nonnegative(),
+});
+
+export const MemoryDeprecatedPayloadSchema = z.object({
+  memoryId: z.string().min(1),
+  reason: z.string().min(1),
+  supersededBy: z.string().optional(),
+});
+
+export const MemoryDeletedPayloadSchema = z.object({
+  memoryId: z.string().min(1),
+  category: z.string().optional(),
+  key: z.string().optional(),
+});
+
 export const EventSchemas = {
   user_prompt: UserPromptPayloadSchema,
   assistant_response: AssistantResponsePayloadSchema,
@@ -229,6 +264,11 @@ export const EventSchemas = {
   task_failed: TaskFailedPayloadSchema,
   execution_cancelled: ExecutionCancelledPayloadSchema,
   execution_completed: ExecutionCompletedPayloadSchema,
+  memory_created: MemoryCreatedPayloadSchema,
+  memory_updated: MemoryUpdatedPayloadSchema,
+  memory_retrieved: MemoryRetrievedPayloadSchema,
+  memory_deprecated: MemoryDeprecatedPayloadSchema,
+  memory_deleted: MemoryDeletedPayloadSchema,
 } as const;
 
 export type CoreEventType = keyof typeof EventSchemas;

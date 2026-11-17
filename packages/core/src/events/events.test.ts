@@ -82,6 +82,22 @@ describe('Event Schemas & Validation', () => {
       tasksFailed: 0,
     });
     expect(execCompleted.tasksCompleted).toBe(3);
+
+    const memCreated = validateEventPayload('memory_created', {
+      memoryId: 'mem_1',
+      category: 'user_preference',
+      key: 'test_runner',
+      confidence: 0.95,
+      status: 'verified',
+    });
+    expect(memCreated.key).toBe('test_runner');
+
+    const memRetrieved = validateEventPayload('memory_retrieved', {
+      query: 'vitest',
+      memoryIds: ['mem_1', 'mem_2'],
+      count: 2,
+    });
+    expect(memRetrieved.count).toBe(2);
   });
 });
 
