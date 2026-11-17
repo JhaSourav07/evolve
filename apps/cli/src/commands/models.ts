@@ -14,7 +14,7 @@ export async function runModelsCommand(): Promise<void> {
       name: m.name,
       size: m.size ? `${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB` : undefined,
       modifiedAt: m.modifiedAt,
-      isActive: m.name === context.config.model.model,
+      isActive: m.name === context.getModel(),
     }));
   } catch {
     models = [];

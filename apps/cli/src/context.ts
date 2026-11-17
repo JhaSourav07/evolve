@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AgentRuntime, createDefaultToolRegistry, OllamaProvider } from '@evolve/agent';
 import {
@@ -50,10 +50,30 @@ export class CliContext {
       mkdirSync(evolveDir, { recursive: true });
     }
 
+    // Load .evolve/config.json if present
+    const configFile = join(evolveDir, 'config.json');
+    let fileConfig: Record<string, unknown> = {};
+    if (existsSync(configFile)) {
+      try {
+        fileConfig = JSON.parse(readFileSync(configFile, 'utf8'));
+      } catch {
+        // ignore malformed config
+      }
+    }
+
+    const fileModelConfig = (fileConfig.model as Record<string, unknown> | undefined) || {};
+    const selectedModel =
+      options.modelName ||
+      (typeof fileModelConfig.model === 'string' ? fileModelConfig.model : undefined);
+
     // 2. Validate configuration
     this.config = validateOrThrow(EvolveConfigSchema, {
+      ...fileConfig,
       workspace: { rootDir: this.rootDir },
-      model: options.modelName ? { model: options.modelName } : undefined,
+      model: {
+        ...fileModelConfig,
+        ...(selectedModel ? { model: selectedModel } : {}),
+      },
     });
 
     // 3. Connect to SQLite database
@@ -91,17 +111,48 @@ export class CliContext {
     this.terminalAdapter = new TerminalAdapter(this.consentManager, this.eventService);
 
     // 7. Ollama Model Provider (dynamic, unhardcoded model selection)
-    const initialModel = options.modelName || this.config.model.model;
+    const initialModel = options.modelName || selectedModel || this.config.model.model;
+    const defaultSafeContextWindow = 16_384;
+    const contextWindow =
+      typeof fileModelConfig.contextWindow === 'number'
+        ? (fileModelConfig.contextWindow as number)
+        : (this.config.model.contextWindow ?? defaultSafeContextWindow);
+
     this.provider = new OllamaProvider({
       model: initialModel,
       baseUrl: this.config.model.baseUrl,
-      contextWindow: this.config.model.contextWindow ?? 32_768,
+      contextWindow,
       timeoutMs: 120_000,
     });
   }
 
   public setModel(model: string): void {
     this.provider.setModel(model);
+    (this.config.model as { model: string }).model = model;
+
+    // Persist user selection to .evolve/config.json
+    try {
+      const evolveDir = join(this.rootDir, '.evolve');
+      const configFile = join(evolveDir, 'config.json');
+      let currentData: Record<string, unknown> = {};
+      if (existsSync(configFile)) {
+        try {
+          currentData = JSON.parse(readFileSync(configFile, 'utf8'));
+        } catch {
+          currentData = {};
+        }
+      }
+      const updated = {
+        ...currentData,
+        model: {
+          ...((currentData.model as Record<string, unknown> | undefined) || {}),
+          model,
+        },
+      };
+      writeFileSync(configFile, JSON.stringify(updated, null, 2), 'utf8');
+    } catch {
+      // non-blocking persistence
+    }
   }
 
   public getModel(): string {
@@ -123,12 +174,14 @@ export class CliContext {
       updatedAt: Date.now(),
     });
 
+    const activeModel = this.provider.getModel() || this.config.model.model;
+
     // Record session started event
     this.eventService.publish(sessionId, 'session_started', {
       goal,
       workspaceRoot: this.rootDir,
       modelConfig: {
-        model: this.config.model.model,
+        model: activeModel,
         provider: 'ollama',
       },
     });

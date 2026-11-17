@@ -36,7 +36,7 @@ export async function runStatusCommand(): Promise<void> {
     gitBranch,
     gitClean,
     provider: context.config.model.provider,
-    model: context.config.model.model,
+    model: context.getModel(),
     isOnline: health.isHealthy,
     sessionId: sessions[0]?.id ?? 'None',
     sessionCount: sessions.length,

@@ -136,14 +136,16 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
 
       const modelExists = options.some((m) => m.name === activeModel);
       if (!modelExists && options.length > 0) {
-        // Auto-select preferred coding or qwen model if default is missing
-        const preferred =
-          options.find((m) => m.name.toLowerCase().includes('coder')) ||
-          options.find((m) => m.name.toLowerCase().includes('qwen')) ||
-          options[0];
-        if (preferred) {
-          context.setModel(preferred.name);
-          setActiveModel(preferred.name);
+        // If the configured model does not exist locally and we're not waiting for user selection
+        if (screen !== 'model_select') {
+          const preferred =
+            options.find((m) => m.name.toLowerCase().includes('coder')) ||
+            options.find((m) => m.name.toLowerCase().includes('qwen')) ||
+            options[0];
+          if (preferred) {
+            context.setModel(preferred.name);
+            setActiveModel(preferred.name);
+          }
         }
       }
 
@@ -169,6 +171,8 @@ export const InteractiveApp: React.FC<InteractiveAppProps> = ({
     setActiveModel(modelName);
     // Reset runtime so next prompt uses the new model
     runtimeRef.current = null;
+    const newSid = context.createSession();
+    setSessionId(newSid);
     setMessages((prev) => [
       ...prev,
       {

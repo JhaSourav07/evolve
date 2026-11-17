@@ -7,7 +7,7 @@ export async function runConfigCommand(): Promise<void> {
   console.log(`\n${Theme.icons.sparkle} EVOLVE CONFIGURATION\n`);
   console.log(`  Model:`);
   console.log(`    Provider:     ${context.config.model.provider}`);
-  console.log(`    Model:        ${context.config.model.model}`);
+  console.log(`    Model:        ${context.getModel()}`);
   console.log(`    Base URL:     ${context.config.model.baseUrl}`);
   console.log(`    Temperature:  ${context.config.model.temperature}`);
   console.log(`    Timeout:      ${context.config.model.timeoutMs}ms`);

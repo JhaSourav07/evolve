@@ -21,12 +21,33 @@ export async function runInitCommand(
   // Create default configuration file if not present
   const configFile = join(evolveDir, 'config.json');
   if (!existsSync(configFile)) {
+    // Attempt to discover local Ollama models for a sensible default
+    let defaultModel = 'qwen2.5-coder:7b';
+    try {
+      const res = await fetch('http://localhost:11434/api/tags');
+      if (res.ok) {
+        const data = (await res.json()) as { models?: Array<{ name: string }> };
+        if (data.models && data.models.length > 0) {
+          const found =
+            data.models.find((m) => m.name.toLowerCase().includes('coder')) ||
+            data.models.find((m) => m.name.toLowerCase().includes('qwen')) ||
+            data.models[0];
+          if (found) {
+            defaultModel = found.name;
+          }
+        }
+      }
+    } catch {
+      // offline / Ollama not running at init
+    }
+
     const defaultConfig = {
       model: {
         provider: 'ollama',
-        model: 'qwen2.5-coder:7b',
+        model: defaultModel,
         baseUrl: 'http://localhost:11434',
         temperature: 0.2,
+        contextWindow: 16384,
       },
       security: {
         requireApprovalForCommands: true,
@@ -38,7 +59,7 @@ export async function runInitCommand(
       },
     };
     writeFileSync(configFile, JSON.stringify(defaultConfig, null, 2), 'utf8');
-    console.log(`  ${Theme.icons.check} Created default config: .evolve/config.json`);
+    console.log(`  ${Theme.icons.check} Created default config: .evolve/config.json (Model: ${defaultModel})`);
   }
 
   // Initialize SQLite database and register project

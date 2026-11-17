@@ -54,4 +54,23 @@ describe('CliContext', () => {
     const runtime = context.createAgentRuntime(sessionId);
     expect(runtime).toBeDefined();
   });
+
+  it('persists selected model and reloads it on subsequent context instances', () => {
+    context.setModel('qwen3.5:9b');
+    expect(context.getModel()).toBe('qwen3.5:9b');
+
+    const sid = context.createSession('Selected Model Goal');
+    const events = context.eventService.getSessionEvents(sid);
+    expect(events[0]?.payload).toMatchObject({
+      modelConfig: {
+        model: 'qwen3.5:9b',
+      },
+    });
+
+    // Close and create new context in same directory
+    context.close();
+    const freshContext = new CliContext({ rootDir: tempDir });
+    expect(freshContext.getModel()).toBe('qwen3.5:9b');
+    freshContext.close();
+  });
 });
