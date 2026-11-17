@@ -99,3 +99,4 @@ export const PlanSchema = z.object({
 });
 export type Plan = z.infer<typeof PlanSchema>;
 export type PlanInput = z.input<typeof PlanSchema>;
+

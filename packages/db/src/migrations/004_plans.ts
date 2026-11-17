@@ -66,3 +66,4 @@ export const migration004: Migration = {
     CREATE INDEX IF NOT EXISTS idx_plan_revisions_plan_id ON plan_revisions(plan_id);
   `,
 };
+

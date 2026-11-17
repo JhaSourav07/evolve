@@ -88,3 +88,4 @@ export type PlanTaskRow = typeof planTasks.$inferSelect;
 export type NewPlanTaskRow = typeof planTasks.$inferInsert;
 export type PlanRevisionRow = typeof planRevisions.$inferSelect;
 export type NewPlanRevisionRow = typeof planRevisions.$inferInsert;
+

@@ -14,3 +14,4 @@ export class InvalidDependencyError extends Error {
     this.name = 'InvalidDependencyError';
   }
 }
+
