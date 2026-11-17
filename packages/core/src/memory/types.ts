@@ -32,16 +32,17 @@ export interface MemoryItem {
   key: string;
   content: string;
   projectId?: string | null | undefined;
-  sourceSessionId?: string | undefined;
-  sourceEventId?: string | undefined;
+  sourceSessionId?: string | null | undefined;
+  sourceEventId?: string | null | undefined;
   sourceType?: MemorySourceType | undefined;
   confidence: number;
   verificationStatus: MemoryVerificationStatus;
   evidence?: Record<string, unknown> | undefined;
+  evidenceJson?: string | null | undefined;
   tags?: string | null | undefined;
   accessCount: number;
   lastAccessedAt: number;
-  supersededBy?: string | undefined;
+  supersededBy?: string | null | undefined;
   createdAt: number;
   updatedAt: number;
 }
