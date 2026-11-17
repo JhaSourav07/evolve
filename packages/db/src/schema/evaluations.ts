@@ -47,3 +47,4 @@ export const evaluations = sqliteTable(
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
 export type NewEvaluationRecord = typeof evaluations.$inferInsert;
+

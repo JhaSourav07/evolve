@@ -134,3 +134,4 @@ export interface EligibleTrainingItem {
   metadata: Record<string, unknown>;
   createdAt: number;
 }
+

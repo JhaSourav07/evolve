@@ -52,3 +52,4 @@ export const migration006: Migration = {
     CREATE INDEX IF NOT EXISTS idx_evaluations_training_eligible ON evaluations(training_eligible);
   `,
 };
+
