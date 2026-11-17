@@ -75,6 +75,39 @@ export const SessionCompletedPayloadSchema = z.object({
   error: z.string().optional(),
 });
 
+export const PlanCreatedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  title: z.string().min(1),
+  taskCount: z.number().int().nonnegative(),
+  mode: z.enum(['quick', 'detailed']),
+  estimatedComplexity: z.enum(['low', 'medium', 'high']),
+  overallRisk: z.enum(['low', 'medium', 'high']),
+});
+
+export const PlanUpdatedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  changesSummary: z.string().min(1),
+  revision: z.number().int().positive(),
+});
+
+export const PlanApprovedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  approvedAt: z.number().int().positive(),
+  notes: z.string().optional(),
+});
+
+export const PlanRejectedPayloadSchema = z.object({
+  planId: z.string().min(1),
+  rejectedAt: z.number().int().positive(),
+  reason: z.string().optional(),
+});
+
+export const PlanRegeneratedPayloadSchema = z.object({
+  previousPlanId: z.string().min(1),
+  newPlanId: z.string().min(1),
+  feedback: z.string().optional(),
+});
+
 export const EventSchemas = {
   user_prompt: UserPromptPayloadSchema,
   assistant_response: AssistantResponsePayloadSchema,
@@ -87,6 +120,11 @@ export const EventSchemas = {
   solution_rejected: SolutionRejectedPayloadSchema,
   session_started: SessionStartedPayloadSchema,
   session_completed: SessionCompletedPayloadSchema,
+  plan_created: PlanCreatedPayloadSchema,
+  plan_updated: PlanUpdatedPayloadSchema,
+  plan_approved: PlanApprovedPayloadSchema,
+  plan_rejected: PlanRejectedPayloadSchema,
+  plan_regenerated: PlanRegeneratedPayloadSchema,
 } as const;
 
 export type CoreEventType = keyof typeof EventSchemas;
