@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   createSessionId,
+  createToolCallId,
   InMemoryEventBus,
   noopLogger,
   validateEventPayload,
@@ -9,8 +10,13 @@ import {
   type EventInputPayloadMap,
   type EventListener,
   type Logger,
+  type ModelGenerateOptions,
+  type ModelMessage,
   type ModelProvider,
+  type ModelResponse,
+  type ModelStreamChunk,
   type SessionId,
+  type ToolCall,
   type ToolCallId,
   type Unsubscribe,
 } from '@evolve/core';
@@ -210,15 +216,60 @@ export class AgentRuntime {
       });
 
       // Invoke model with error recovery
-      let response;
+      let response: ModelResponse;
       try {
-        response = await this.provider.generate(messages, {
-          ...(this.config.temperature !== undefined
-            ? { temperature: this.config.temperature }
-            : {}),
-          ...(tools ? { tools } : {}),
-          ...(signal ? { signal } : {}),
-        });
+        const providerAny = this.provider as unknown as {
+          stream?: (
+            msgs: readonly ModelMessage[],
+            opts?: ModelGenerateOptions,
+          ) => AsyncIterable<ModelStreamChunk>;
+        };
+
+        if (options?.onChunk && typeof providerAny.stream === 'function') {
+          let accumulatedContent = '';
+          const accumulatedThinking = '';
+          const toolCallsAcc: ToolCall[] = [];
+
+          for await (const chunk of providerAny.stream(messages, {
+            ...(this.config.temperature !== undefined
+              ? { temperature: this.config.temperature }
+              : {}),
+            ...(tools ? { tools } : {}),
+            ...(signal ? { signal } : {}),
+          })) {
+            if (signal?.aborted) break;
+            if (chunk.delta) {
+              accumulatedContent += chunk.delta;
+              options.onChunk({ delta: chunk.delta });
+            }
+            if (chunk.toolCallDelta && chunk.toolCallDelta.name) {
+              toolCallsAcc.push({
+                id: chunk.toolCallDelta.id ?? createToolCallId(),
+                name: chunk.toolCallDelta.name,
+                arguments: chunk.toolCallDelta.arguments ?? {},
+              });
+            }
+          }
+
+          response = {
+            id: `res_${randomUUID()}`,
+            message: {
+              role: 'assistant' as const,
+              content: accumulatedContent,
+              ...(accumulatedThinking ? { thinking: accumulatedThinking } : {}),
+              ...(toolCallsAcc.length > 0 ? { toolCalls: toolCallsAcc } : {}),
+            },
+            finishReason: 'stop' as const,
+          };
+        } else {
+          response = await this.provider.generate(messages, {
+            ...(this.config.temperature !== undefined
+              ? { temperature: this.config.temperature }
+              : {}),
+            ...(tools ? { tools } : {}),
+            ...(signal ? { signal } : {}),
+          });
+        }
       } catch (modelErr) {
         const durationMs = Date.now() - startTime;
         const error = `Model invocation failed: ${modelErr instanceof Error ? modelErr.message : String(modelErr)}`;

@@ -46,6 +46,7 @@ export interface AgentRunOptions {
   signal?: AbortSignal | undefined;
   sessionId?: SessionId | undefined;
   memories?: readonly { category: string; key: string; content: string }[] | undefined;
+  onChunk?: ((chunk: { delta: string }) => void) | undefined;
 }
 
 export interface AgentRunResult {
