@@ -19,9 +19,10 @@ import {
   type VerificationResult,
 } from '@evolve/core';
 import type { EvolveDatabaseInstance } from '@evolve/db';
-import { MemoryService, PlanRepository } from '@evolve/db';
+import { FeedbackService, MemoryService, PlanRepository } from '@evolve/db';
 import { DirectedAcyclicGraph } from '@evolve/planner';
 import { DebuggingEngine } from '../debugging/engine.js';
+import { EvaluationEngine } from '../evaluation/index.js';
 import { MemoryConsolidator, MemoryExtractor, MemoryRetriever } from '../memory/index.js';
 import { AgentRuntime } from '../runtime/agent.js';
 import type { AgentEventSink, AgentRunOptions } from '../runtime/types.js';
@@ -36,6 +37,8 @@ export interface PlanExecutorOptions {
   debuggingEngine?: DebuggingEngine | undefined;
   database?: EvolveDatabaseInstance | undefined;
   memoryService?: MemoryService | undefined;
+  feedbackService?: FeedbackService | undefined;
+  evaluationEngine?: EvaluationEngine | undefined;
   eventSink?: AgentEventSink | undefined;
   logger?: Logger | undefined;
   maxDebugAttempts?: number | undefined;
@@ -58,6 +61,8 @@ export class PlanExecutor {
   private readonly memoryRetriever?: MemoryRetriever | undefined;
   private readonly memoryConsolidator?: MemoryConsolidator | undefined;
   private readonly memoryExtractor?: MemoryExtractor | undefined;
+  private readonly feedbackService?: FeedbackService | undefined;
+  private readonly evaluationEngine?: EvaluationEngine | undefined;
   private readonly eventSink?: AgentEventSink | undefined;
   private readonly logger: Logger;
   private readonly internalBus: InMemoryEventBus;
@@ -92,6 +97,17 @@ export class PlanExecutor {
       this.memoryConsolidator = new MemoryConsolidator(this.memoryService);
       this.memoryExtractor = new MemoryExtractor(this.memoryConsolidator);
     }
+
+    this.feedbackService =
+      options.feedbackService ??
+      (options.database?.db ? new FeedbackService(options.database.db) : undefined);
+
+    this.evaluationEngine =
+      options.evaluationEngine ??
+      new EvaluationEngine({
+        feedbackService: this.feedbackService,
+        memoryService: this.memoryService,
+      });
 
     this.eventSink = options.eventSink;
     this.logger = options.logger ?? noopLogger;
@@ -452,13 +468,25 @@ export class PlanExecutor {
     const runRes = await runtime.run(prompt, runOpts);
 
     if (!runRes.success) {
+      const runErr = runRes.error ?? 'Agent runtime encountered an error during task execution.';
+      const evalReport = this.evaluationEngine?.evaluateTask({
+        plan,
+        task,
+        sessionId,
+        projectId: plan.projectId,
+        verifications,
+        filesModified: Array.from(filesModified),
+        runtimeError: runErr,
+      });
+
       return {
         taskId: task.id,
         status: 'failed',
         durationMs: Date.now() - taskStartTime,
         filesModified: Array.from(filesModified),
         verifications,
-        error: runRes.error ?? 'Agent runtime encountered an error during task execution.',
+        evaluationId: evalReport?.id,
+        error: runErr,
       };
     }
 
@@ -508,19 +536,41 @@ export class PlanExecutor {
         });
 
         if (!debugResult.recovered) {
+          const finalErr =
+            debugResult.finalError ??
+            'Automated verification and debugging failed to fix test/build errors.';
+
+          const evalReport = this.evaluationEngine?.evaluateTask({
+            plan,
+            task,
+            sessionId,
+            projectId: plan.projectId,
+            verifications,
+            filesModified: Array.from(filesModified),
+            runtimeError: finalErr,
+          });
+
           return {
             taskId: task.id,
             status: 'failed',
             durationMs: Date.now() - taskStartTime,
             filesModified: Array.from(filesModified),
             verifications,
-            error:
-              debugResult.finalError ??
-              'Automated verification and debugging failed to fix test/build errors.',
+            evaluationId: evalReport?.id,
+            error: finalErr,
           };
         }
       }
     }
+
+    const evalReport = this.evaluationEngine?.evaluateTask({
+      plan,
+      task,
+      sessionId,
+      projectId: plan.projectId,
+      verifications,
+      filesModified: Array.from(filesModified),
+    });
 
     return {
       taskId: task.id,
@@ -528,6 +578,7 @@ export class PlanExecutor {
       durationMs: Date.now() - taskStartTime,
       filesModified: Array.from(filesModified),
       verifications,
+      evaluationId: evalReport?.id,
     };
   }
 

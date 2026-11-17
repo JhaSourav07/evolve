@@ -30,6 +30,7 @@ export interface TaskExecutionResult {
   durationMs: number;
   filesModified: string[];
   verifications: VerificationResult[];
+  evaluationId?: string | undefined;
   error?: string | undefined;
 }
 
