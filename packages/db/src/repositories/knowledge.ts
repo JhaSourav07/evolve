@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import type { EvolveDatabase } from '../connection.js';
 import { knowledge, type KnowledgeRecord, type NewKnowledgeRecord } from '../schema/index.js';
 
@@ -64,10 +64,20 @@ export class KnowledgeRepository {
       return this.db
         .select()
         .from(knowledge)
-        .where(and(eq(knowledge.key, key), eq(knowledge.projectId, projectId)))
+        .where(
+          and(
+            eq(knowledge.key, key),
+            eq(knowledge.projectId, projectId),
+            ne(knowledge.verificationStatus, 'deprecated'),
+          ),
+        )
         .get();
     }
-    return this.db.select().from(knowledge).where(eq(knowledge.key, key)).get();
+    return this.db
+      .select()
+      .from(knowledge)
+      .where(and(eq(knowledge.key, key), ne(knowledge.verificationStatus, 'deprecated')))
+      .get();
   }
 
   public listByCategory(category: string, projectId?: string): KnowledgeRecord[] {
