@@ -131,3 +131,4 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ lines, lang }) => {
     </Box>
   );
 };
+

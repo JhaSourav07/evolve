@@ -63,3 +63,4 @@ describe('ToolExecution Action Formatter', () => {
     expect(formatToolPastTense('custom_indexer')).toBe('custom_indexer');
   });
 });
+
